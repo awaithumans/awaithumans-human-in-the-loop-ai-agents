@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -78,5 +78,5 @@ async def mint_embed_token(
     return EmbedTokenResponse(
         embed_token=token,
         embed_url=f"{base}/embed?id={body.task_id}#token={token}",
-        expires_at=datetime.fromtimestamp(exp, tz=UTC).isoformat(),
+        expires_at=datetime.fromtimestamp(exp, tz=timezone.utc).isoformat(),
     )
