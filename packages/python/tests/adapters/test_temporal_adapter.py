@@ -34,8 +34,8 @@ import pytest
 from pydantic import BaseModel
 
 from awaithumans.adapters.temporal import (
-    _create_task_activity,
     _signal_name,
+    awaithumans_create_task,
     dispatch_signal,
 )
 from awaithumans.errors import (
@@ -263,7 +263,7 @@ async def test_await_human_returns_response_after_signal(
     async def fake_create(req: adapter._CreateTaskInput) -> dict:
         return {"id": "task-stub", "idempotency_key": req.idempotency_key}
 
-    monkeypatch.setattr(adapter, "_create_task_activity", fake_create)
+    monkeypatch.setattr(adapter, "awaithumans_create_task", fake_create)
 
     async with await WorkflowEnvironment.start_local() as env:
         client = env.client
@@ -316,7 +316,7 @@ async def test_await_human_raises_typed_error_on_cancelled_status(
     async def fake_create(req: adapter._CreateTaskInput) -> dict:
         return {"id": "task-stub", "idempotency_key": req.idempotency_key}
 
-    monkeypatch.setattr(adapter, "_create_task_activity", fake_create)
+    monkeypatch.setattr(adapter, "awaithumans_create_task", fake_create)
 
     async with await WorkflowEnvironment.start_local() as env:
         client = env.client
@@ -381,7 +381,7 @@ async def test_create_task_activity_posts_with_bearer_when_api_key_set(
 
     from awaithumans.adapters.temporal import _CreateTaskInput
 
-    out = await _create_task_activity(
+    out = await awaithumans_create_task(
         _CreateTaskInput(
             server_url="http://test.example",
             api_key="test-bearer",
