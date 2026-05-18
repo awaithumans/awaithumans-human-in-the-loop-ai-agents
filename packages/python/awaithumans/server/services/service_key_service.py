@@ -14,7 +14,7 @@ from __future__ import annotations
 import hashlib
 import secrets
 import time
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
@@ -73,7 +73,7 @@ async def create_service_key(
         name=name,
         key_hash=key_hash,
         key_prefix=raw[:SERVICE_KEY_DISPLAY_PREFIX_LENGTH],
-        created_at=datetime.now(UTC),
+        created_at=datetime.now(timezone.utc),
     )
     session.add(row)
     await session.commit()
@@ -96,7 +96,7 @@ async def verify_service_key(
     row = result.scalar_one_or_none()
     if row is None or row.revoked_at is not None:
         raise ServiceKeyNotFoundError()
-    row.last_used_at = datetime.now(UTC)
+    row.last_used_at = datetime.now(timezone.utc)
     session.add(row)
     await session.commit()
     await session.refresh(row)
@@ -122,7 +122,7 @@ async def revoke_service_key(
     if row is None:
         raise ServiceKeyNotFoundError()
     if row.revoked_at is None:
-        row.revoked_at = datetime.now(UTC)
+        row.revoked_at = datetime.now(timezone.utc)
         session.add(row)
         await session.commit()
         await session.refresh(row)

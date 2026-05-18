@@ -6,7 +6,7 @@ SQLite engine.
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 
 import pytest
 from sqlalchemy.exc import IntegrityError
@@ -24,7 +24,7 @@ def test_service_key_round_trip() -> None:
         name="acme-prod",
         key_hash="a" * 64,
         key_prefix="ah_sk_abcdef",
-        created_at=datetime.now(UTC),
+        created_at=datetime.now(timezone.utc),
     )
     with Session(engine) as session:
         session.add(row)
@@ -51,14 +51,14 @@ def test_service_key_unique_hash_constraint() -> None:
         name="alpha",
         key_hash="x" * 64,
         key_prefix="ah_sk_aaaaaa",
-        created_at=datetime.now(UTC),
+        created_at=datetime.now(timezone.utc),
     )
     second = ServiceAPIKey(
         id="01B",
         name="beta",
         key_hash="x" * 64,
         key_prefix="ah_sk_bbbbbb",
-        created_at=datetime.now(UTC),
+        created_at=datetime.now(timezone.utc),
     )
     with Session(engine) as session:
         session.add(first)
