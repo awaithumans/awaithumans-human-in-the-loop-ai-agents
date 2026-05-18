@@ -11,8 +11,8 @@ from collections.abc import AsyncIterator
 import pytest
 import pytest_asyncio
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
-from sqlmodel import SQLModel
 from sqlalchemy.orm import sessionmaker
+from sqlmodel import SQLModel
 
 from awaithumans.server.services.exceptions import ServiceKeyNotFoundError
 from awaithumans.server.services.service_key_service import (

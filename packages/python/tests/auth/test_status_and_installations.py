@@ -6,7 +6,6 @@ from collections.abc import Iterator
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from awaithumans.server.app import create_app
 from awaithumans.server.services.slack_installation_service import upsert_installation
@@ -104,9 +103,7 @@ def test_status_slack_mode_off_when_unconfigured(client: TestClient, monkeypatch
 
 
 @pytest.mark.asyncio
-async def test_list_installations_returns_public_shape(
-    client: TestClient, operator_user
-) -> None:
+async def test_list_installations_returns_public_shape(client: TestClient, operator_user) -> None:
     """Seed one installation directly and verify bot_token is never in the response."""
     # Use a fresh session to write the fixture — the TestClient's session
     # runs in a request context and isn't reachable from here.

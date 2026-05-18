@@ -35,9 +35,9 @@ from dataclasses import dataclass
 
 @dataclass(frozen=True)
 class ChannelRoute:
-    channel: str          # "email", "slack"
+    channel: str  # "email", "slack"
     identity: str | None  # identity slug / team_id; None = use default
-    target: str           # email address, "#channel", "@UUSERID", etc.
+    target: str  # email address, "#channel", "@UUSERID", etc.
 
 
 def parse_route(entry: str) -> ChannelRoute | None:
@@ -67,9 +67,7 @@ def parse_route(entry: str) -> ChannelRoute | None:
     )
 
 
-def routes_for_channel(
-    notify: list[str] | None, channel: str
-) -> list[ChannelRoute]:
+def routes_for_channel(notify: list[str] | None, channel: str) -> list[ChannelRoute]:
     """Filter notify entries to just one channel."""
     if not notify:
         return []

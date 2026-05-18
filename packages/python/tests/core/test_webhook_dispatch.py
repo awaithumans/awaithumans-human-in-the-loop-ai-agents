@@ -224,9 +224,7 @@ async def test_enqueue_creates_pending_row_with_signed_body(
         idempotency_key="webhook-test",
         callback_url="https://example.test/cb",
     )
-    completed = await complete_task(
-        session, task_id=task.id, response={"approved": True}
-    )
+    completed = await complete_task(session, task_id=task.id, response={"approved": True})
 
     await enqueue_completion_webhook(session, completed)
 
@@ -462,9 +460,7 @@ async def test_redeliver_resets_abandoned_row_to_pending(
     updated = await redeliver(session, row.id)
     assert updated is not None
     assert updated.status == WebhookDeliveryStatus.PENDING
-    assert updated.next_attempt_at <= datetime.now(timezone.utc) + timedelta(
-        seconds=2
-    )
+    assert updated.next_attempt_at <= datetime.now(timezone.utc) + timedelta(seconds=2)
 
 
 @pytest.mark.asyncio

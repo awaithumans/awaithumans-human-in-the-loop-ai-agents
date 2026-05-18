@@ -80,11 +80,7 @@ def _extract_value(field: Any, action: dict[str, Any]) -> Any:
 
     if isinstance(field, PictureChoice):
         if field.multiple:
-            return [
-                o["value"]
-                for o in action.get("selected_options", [])
-                if "value" in o
-            ]
+            return [o["value"] for o in action.get("selected_options", []) if "value" in o]
         opt = action.get("selected_option")
         return [opt["value"]] if opt and "value" in opt else []
 

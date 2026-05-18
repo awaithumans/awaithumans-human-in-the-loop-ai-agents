@@ -48,8 +48,8 @@ from awaithumans.server.db.models import (  # noqa: F401 — register models
     SlackInstallation,
     Task,
     TaskStatus,
+    User,
 )
-from awaithumans.server.db.models import User
 from awaithumans.server.services.task_service import create_task, get_task
 from awaithumans.utils.constants import SLACK_ACTION_OPEN_REVIEW
 
@@ -250,10 +250,8 @@ async def test_interactions_rejects_bad_signature(
     client, _ = slack_ctx
     body = _form_body({"type": "block_actions", "actions": []})
     headers = _sign(body)
-    headers["X-Slack-Signature"] = "v0=" + "0" * 64   # well-formed but wrong
-    resp = await client.post(
-        "/api/channels/slack/interactions", content=body, headers=headers
-    )
+    headers["X-Slack-Signature"] = "v0=" + "0" * 64  # well-formed but wrong
+    resp = await client.post("/api/channels/slack/interactions", content=body, headers=headers)
     assert resp.status_code == 401
 
 
@@ -265,9 +263,7 @@ async def test_interactions_rejects_stale_timestamp(
     body = _form_body({"type": "block_actions", "actions": []})
     # 10 minutes old — the signing module caps at 5 minutes.
     headers = _sign(body, timestamp=int(time.time()) - 600)
-    resp = await client.post(
-        "/api/channels/slack/interactions", content=body, headers=headers
-    )
+    resp = await client.post("/api/channels/slack/interactions", content=body, headers=headers)
     assert resp.status_code == 401
 
 
@@ -295,9 +291,7 @@ async def test_interactions_400_on_missing_payload(
 ) -> None:
     client, _ = slack_ctx
     # Signed but empty body — signature verifies, but the form has no `payload` key.
-    resp = await client.post(
-        "/api/channels/slack/interactions", content=b"", headers=_sign(b"")
-    )
+    resp = await client.post("/api/channels/slack/interactions", content=b"", headers=_sign(b""))
     assert resp.status_code == 400
 
 
@@ -331,9 +325,7 @@ async def test_block_actions_opens_modal(
         ],
     }
     body = _form_body(payload)
-    resp = await client.post(
-        "/api/channels/slack/interactions", content=body, headers=_sign(body)
-    )
+    resp = await client.post("/api/channels/slack/interactions", content=body, headers=_sign(body))
     assert resp.status_code == 200
 
     # views.open should have been called exactly once with a modal view
@@ -362,9 +354,7 @@ async def test_block_actions_ignores_non_open_action(
         "actions": [{"action_id": "awaithumans.open_dashboard", "value": "ignored"}],
     }
     body = _form_body(payload)
-    resp = await client.post(
-        "/api/channels/slack/interactions", content=body, headers=_sign(body)
-    )
+    resp = await client.post("/api/channels/slack/interactions", content=body, headers=_sign(body))
     assert resp.status_code == 200
     assert fake.calls == []
 
@@ -383,9 +373,7 @@ async def test_block_actions_silent_when_task_has_no_form(
         "actions": [{"action_id": SLACK_ACTION_OPEN_REVIEW, "value": task_id}],
     }
     body = _form_body(payload)
-    resp = await client.post(
-        "/api/channels/slack/interactions", content=body, headers=_sign(body)
-    )
+    resp = await client.post("/api/channels/slack/interactions", content=body, headers=_sign(body))
     assert resp.status_code == 200
     assert fake.calls == []
 
@@ -433,9 +421,7 @@ async def test_view_submission_completes_task(
         },
     }
     body = _form_body(payload)
-    resp = await client.post(
-        "/api/channels/slack/interactions", content=body, headers=_sign(body)
-    )
+    resp = await client.post("/api/channels/slack/interactions", content=body, headers=_sign(body))
     assert resp.status_code == 200
     assert resp.json() == {}  # empty response closes the modal
 
@@ -480,9 +466,7 @@ async def test_block_actions_blocked_for_non_assignee_non_operator(
         ],
     }
     body = _form_body(payload)
-    resp = await client.post(
-        "/api/channels/slack/interactions", content=body, headers=_sign(body)
-    )
+    resp = await client.post("/api/channels/slack/interactions", content=body, headers=_sign(body))
     assert resp.status_code == 200
     # Modal NOT opened — the route returns 200 but does no Slack work
     # beyond the ephemeral "you're not authorised" reply path.
@@ -526,9 +510,7 @@ async def test_view_submission_blocked_for_non_assignee_non_operator(
         },
     }
     body = _form_body(payload)
-    resp = await client.post(
-        "/api/channels/slack/interactions", content=body, headers=_sign(body)
-    )
+    resp = await client.post("/api/channels/slack/interactions", content=body, headers=_sign(body))
     # Modal returns an error block instead of empty — task NOT completed.
     assert resp.status_code == 200
     body_json = resp.json()
@@ -550,9 +532,7 @@ async def test_view_submission_missing_metadata_400(
         "view": {"state": {"values": {}}},
     }
     body = _form_body(payload)
-    resp = await client.post(
-        "/api/channels/slack/interactions", content=body, headers=_sign(body)
-    )
+    resp = await client.post("/api/channels/slack/interactions", content=body, headers=_sign(body))
     assert resp.status_code == 400
 
 
@@ -568,8 +548,6 @@ async def test_unknown_payload_type_is_no_op(
     client, fake = slack_ctx
     payload = {"type": "shortcut", "user": {"id": "U"}}
     body = _form_body(payload)
-    resp = await client.post(
-        "/api/channels/slack/interactions", content=body, headers=_sign(body)
-    )
+    resp = await client.post("/api/channels/slack/interactions", content=body, headers=_sign(body))
     assert resp.status_code == 200
     assert fake.calls == []

@@ -142,9 +142,7 @@ def embed_token() -> str:
 # ── Tests ─────────────────────────────────────────────────────────────────────
 
 
-def test_get_own_task_with_embed_bearer_returns_200(
-    client: TestClient, embed_token: str
-) -> None:
+def test_get_own_task_with_embed_bearer_returns_200(client: TestClient, embed_token: str) -> None:
     """GET /api/tasks/<own_task_id> with valid embed bearer → 200."""
     resp = client.get(
         f"/api/tasks/{_TASK_ID}",
@@ -155,9 +153,7 @@ def test_get_own_task_with_embed_bearer_returns_200(
     assert body["id"] == _TASK_ID
 
 
-def test_get_other_task_with_embed_bearer_returns_403(
-    client: TestClient, embed_token: str
-) -> None:
+def test_get_other_task_with_embed_bearer_returns_403(client: TestClient, embed_token: str) -> None:
     """GET /api/tasks/<other_task_id> with embed bearer → 403 (out-of-scope)."""
     resp = client.get(
         f"/api/tasks/{_OTHER_TASK_ID}",

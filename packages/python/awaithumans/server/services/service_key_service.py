@@ -28,7 +28,6 @@ from awaithumans.utils.constants import (
     SERVICE_KEY_RAW_BYTES,
 )
 
-
 # ── Private helpers ────────────────────────────────────────────────────
 
 
@@ -52,9 +51,7 @@ def _ulid() -> str:
 # ── Public API ─────────────────────────────────────────────────────────
 
 
-async def create_service_key(
-    session: AsyncSession, *, name: str
-) -> tuple[str, ServiceAPIKey]:
+async def create_service_key(session: AsyncSession, *, name: str) -> tuple[str, ServiceAPIKey]:
     """Create a new service key and persist its hash.
 
     Returns (raw, row). The raw key is shown once, never stored.
@@ -62,8 +59,7 @@ async def create_service_key(
     """
     if not name or len(name) > SERVICE_KEY_MAX_NAME_LENGTH:
         raise ValueError(
-            f"Service key name must be 1..{SERVICE_KEY_MAX_NAME_LENGTH} chars, "
-            f"got {len(name)}."
+            f"Service key name must be 1..{SERVICE_KEY_MAX_NAME_LENGTH} chars, got {len(name)}."
         )
 
     raw = f"{SERVICE_KEY_PREFIX}{secrets.token_hex(SERVICE_KEY_RAW_BYTES)}"
@@ -81,18 +77,14 @@ async def create_service_key(
     return raw, row
 
 
-async def verify_service_key(
-    session: AsyncSession, raw_key: str
-) -> ServiceAPIKey:
+async def verify_service_key(session: AsyncSession, raw_key: str) -> ServiceAPIKey:
     """Verify a raw service key and touch last_used_at.
 
     Raises ServiceKeyNotFoundError on miss OR revoked — same error in
     both cases to avoid leaking row existence to bearer-of-bad-key.
     """
     h = _hash(raw_key)
-    result = await session.execute(
-        select(ServiceAPIKey).where(ServiceAPIKey.key_hash == h)
-    )
+    result = await session.execute(select(ServiceAPIKey).where(ServiceAPIKey.key_hash == h))
     row = result.scalar_one_or_none()
     if row is None or row.revoked_at is not None:
         raise ServiceKeyNotFoundError()
@@ -114,9 +106,7 @@ async def list_service_keys(
     return list(result.scalars().all())
 
 
-async def revoke_service_key(
-    session: AsyncSession, key_id: str
-) -> ServiceAPIKey:
+async def revoke_service_key(session: AsyncSession, key_id: str) -> ServiceAPIKey:
     """Idempotently revoke a service key. Raises ServiceKeyNotFoundError on miss."""
     row = await session.get(ServiceAPIKey, key_id)
     if row is None:

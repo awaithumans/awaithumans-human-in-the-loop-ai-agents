@@ -52,14 +52,12 @@ DARK_PALETTE = {
 
 # ─── Typography ─────────────────────────────────────────────────────────
 
-FONT_STACK = (
-    "-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif"
-)
+FONT_STACK = "-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif"
 
 # ─── Button spec + renderer ─────────────────────────────────────────────
 
 _BUTTON_STYLES = {
-    "primary": (_BRAND, _BG_DARK),    # bg, fg
+    "primary": (_BRAND, _BG_DARK),  # bg, fg
     "danger": ("#F87171", _BG_DARK),
     "neutral": ("#E5E7EB", _BG_DARK),
 }
@@ -79,7 +77,7 @@ def render_button(button: ButtonSpec) -> str:
     return (
         f'<a href="{escape(button.url, quote=True)}" '
         f'style="display:inline-block;padding:12px 22px;background:{bg};'
-        f'color:{fg};text-decoration:none;border-radius:6px;'
+        f"color:{fg};text-decoration:none;border-radius:6px;"
         f'font-weight:600;font-size:14px;margin:0 8px 8px 0;">'
-        f'{escape(button.label)}</a>'
+        f"{escape(button.label)}</a>"
     )

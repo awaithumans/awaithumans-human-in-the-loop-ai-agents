@@ -44,7 +44,7 @@ def test_replay_carries_idempotent_replayed_header(client: TestClient) -> None: 
 
     first = client.post("/api/tasks", json=body, headers=_admin_headers())
     assert first.status_code == 201
-    assert "idempotent-replayed" not in {k.lower() for k in first.headers.keys()}
+    assert "idempotent-replayed" not in {k.lower() for k in first.headers}
 
     second = client.post("/api/tasks", json=body, headers=_admin_headers())
     # Status stays 201 (Stripe convention) — flipping to 200 would

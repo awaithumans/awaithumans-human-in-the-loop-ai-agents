@@ -16,8 +16,6 @@ from fastapi.responses import Response
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from awaithumans.server.db.models import User
-
 from awaithumans.server.channels.email import notify_task as notify_task_email
 from awaithumans.server.channels.slack import notify_task as notify_task_slack
 from awaithumans.server.channels.slack.post_completion import (
@@ -34,7 +32,7 @@ from awaithumans.server.core.task_auth import (
     require_task_read,
 )
 from awaithumans.server.db.connection import get_session
-from awaithumans.server.db.models import Task, TaskStatus
+from awaithumans.server.db.models import Task, TaskStatus, User
 from awaithumans.server.schemas import (
     AuditEntryResponse,
     CompleteTaskRequest,
@@ -78,9 +76,7 @@ def _user_display_name(user: User) -> str:
     return user.id
 
 
-async def _build_user_index(
-    session: AsyncSession, tasks: Iterable[Task]
-) -> dict[str, User]:
+async def _build_user_index(session: AsyncSession, tasks: Iterable[Task]) -> dict[str, User]:
     """Bulk-load Users referenced by the tasks (assignee + completer).
 
     One query per request instead of 2N — list_tasks_route in
@@ -136,9 +132,7 @@ async def _task_to_response_with_lookup(
         assignee = await get_user(session, task.assigned_to_user_id)
     if task.completed_by_user_id:
         completer = await get_user(session, task.completed_by_user_id)
-    return _task_to_response(
-        task, redact=redact, assignee=assignee, completer=completer
-    )
+    return _task_to_response(task, redact=redact, assignee=assignee, completer=completer)
 
 
 # ─── Routes ──────────────────────────────────────────────────────────────
@@ -270,9 +264,7 @@ async def list_tasks_route(
     endpoint — block them before any scoping logic."""
     if get_embed_ctx(request) is not None:
         raise HTTPException(status_code=403, detail="embed_token_cannot_list_tasks")
-    if caller_is_operator(request) or getattr(
-        request.state, "auth_admin_token", False
-    ):
+    if caller_is_operator(request) or getattr(request.state, "auth_admin_token", False):
         scoped_assigned_user_id: str | None = None
     else:
         # Non-operator session — force scope to the caller's own tasks

@@ -41,9 +41,9 @@ class Settings(BaseSettings):
     # ── Email channel ────────────────────────────────────────────────
     # Server-wide default identity for email notifications. Per-task
     # `notify=["email+acme-prod:alice@..."]` overrides this.
-    EMAIL_TRANSPORT: str | None = None      # "resend" | "smtp" | "logging" | "noop"
-    EMAIL_FROM: str | None = None           # "notifications@acme.com"
-    EMAIL_FROM_NAME: str | None = None      # "Acme Tasks"
+    EMAIL_TRANSPORT: str | None = None  # "resend" | "smtp" | "logging" | "noop"
+    EMAIL_FROM: str | None = None  # "notifications@acme.com"
+    EMAIL_FROM_NAME: str | None = None  # "Acme Tasks"
     EMAIL_REPLY_TO: str | None = None
     # Resend transport.
     RESEND_KEY: str | None = None
@@ -52,7 +52,7 @@ class Settings(BaseSettings):
     SMTP_PORT: int = 587
     SMTP_USER: str | None = None
     SMTP_PASSWORD: str | None = None
-    SMTP_USE_TLS: bool = False   # Implicit TLS (port 465). Rare.
+    SMTP_USE_TLS: bool = False  # Implicit TLS (port 465). Rare.
     SMTP_START_TLS: bool = True  # STARTTLS on port 587. Most common.
 
     # Admin API token gates identity-management endpoints

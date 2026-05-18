@@ -156,9 +156,7 @@ def verify_action_token(token: str) -> ActionClaim:
     # the action route falls back to None for those (audit log will
     # still show "—" for completed_by, same as before this change).
     recipient_raw = payload.get("r")
-    recipient = (
-        recipient_raw if isinstance(recipient_raw, str) and recipient_raw else None
-    )
+    recipient = recipient_raw if isinstance(recipient_raw, str) and recipient_raw else None
 
     return ActionClaim(
         task_id=task_id,

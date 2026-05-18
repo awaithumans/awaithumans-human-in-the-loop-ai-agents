@@ -51,11 +51,7 @@ async def embed_token(
     `ttl_seconds` is clamped to the server's [60, 3600] window.
     """
     _refuse_browser_runtime()
-    base = (
-        server_url
-        or os.environ.get("AWAITHUMANS_URL")
-        or DEFAULT_SERVER
-    ).rstrip("/")
+    base = (server_url or os.environ.get("AWAITHUMANS_URL") or DEFAULT_SERVER).rstrip("/")
 
     body: dict[str, object] = {
         "task_id": task_id,

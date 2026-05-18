@@ -95,9 +95,7 @@ def test_no_buttons_means_no_action_ids_anywhere() -> None:
             # interaction button — those must not exist on the
             # terminal surface.
             if "action_id" in element and "url" not in element:
-                raise AssertionError(
-                    f"Terminal blocks contain interactive element: {element}"
-                )
+                raise AssertionError(f"Terminal blocks contain interactive element: {element}")
 
 
 def test_unknown_status_falls_back_to_closed() -> None:

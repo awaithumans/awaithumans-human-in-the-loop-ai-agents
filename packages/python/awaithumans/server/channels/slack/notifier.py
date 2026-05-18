@@ -224,9 +224,7 @@ def _is_channel_target(target: str) -> bool:
     return target.startswith(("C", "G"))
 
 
-async def _resolve_client(
-    session: AsyncSession, route: ChannelRoute
-) -> AsyncWebClient | None:
+async def _resolve_client(session: AsyncSession, route: ChannelRoute) -> AsyncWebClient | None:
     if route.identity:
         # identity-suffixed route: pick exactly that workspace, no fallback.
         return await get_client_for_team(session, route.identity)

@@ -6,7 +6,6 @@ from awaithumans.forms import (
     FormDefinition,
     display_text,
     long_text,
-    short_text,
     single_select,
     switch,
 )
@@ -70,9 +69,7 @@ def test_single_select_over_4_falls_back_to_link_out() -> None:
     form = FormDefinition(
         fields=[
             _name(
-                single_select(
-                    options=[(c, c.upper()) for c in "abcde"], label="Pick"
-                ),
+                single_select(options=[(c, c.upper()) for c in "abcde"], label="Pick"),
                 "pick",
             )
         ]
@@ -167,9 +164,7 @@ def test_open_task_button_styled_primary_when_alone() -> None:
     msg_buttons = _build(form)
     # Locate the Open-task <a> by searching for the label.
     open_anchor_start = msg_buttons.html.index("Open task")
-    open_anchor_chunk = msg_buttons.html[
-        open_anchor_start - 200 : open_anchor_start
-    ]
+    open_anchor_chunk = msg_buttons.html[open_anchor_start - 200 : open_anchor_start]
     assert brand not in open_anchor_chunk
 
 

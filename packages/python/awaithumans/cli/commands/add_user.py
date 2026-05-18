@@ -29,12 +29,12 @@ def add_user(
     role: str | None = typer.Option(None, help="Routing role, e.g. 'kyc-reviewer'."),
     access_level: str | None = typer.Option(None, help="Routing access level, e.g. 'senior'."),
     pool: str | None = typer.Option(None, help="Routing pool, e.g. 'ops'."),
-    is_operator: bool = typer.Option(
-        False, "--operator", help="Grant dashboard admin rights."
-    ),
+    is_operator: bool = typer.Option(False, "--operator", help="Grant dashboard admin rights."),
     password: str | None = typer.Option(
         None,
-        help="Dashboard login password (min 8 chars). Leave blank for users who only receive tasks.",
+        help=(
+            "Dashboard login password (min 8 chars). Leave blank for users who only receive tasks."
+        ),
         prompt=False,
     ),
 ) -> None:

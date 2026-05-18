@@ -26,12 +26,7 @@ def _name(field, n):
 
 def _state(**blocks):
     """Build a Slack view.state.values dict. Each kwarg: name=(action_dict)."""
-    return {
-        "values": {
-            f"{SLACK_BLOCK_ID_PREFIX}{n}": {n: action}
-            for n, action in blocks.items()
-        }
-    }
+    return {"values": {f"{SLACK_BLOCK_ID_PREFIX}{n}": {n: action} for n, action in blocks.items()}}
 
 
 # ─── Per-primitive coercion ─────────────────────────────────────────────
@@ -41,10 +36,12 @@ def test_switch_true() -> None:
     form = FormDefinition(fields=[_name(switch(label="OK"), "ok")])
     resp = slack_values_to_response(
         form,
-        _state(ok={
-            "type": "radio_buttons",
-            "selected_option": {"value": "true", "text": {"type": "plain_text", "text": "Yes"}},
-        }),
+        _state(
+            ok={
+                "type": "radio_buttons",
+                "selected_option": {"value": "true", "text": {"type": "plain_text", "text": "Yes"}},
+            }
+        ),
     )
     assert resp == {"ok": True}
 
@@ -53,10 +50,12 @@ def test_switch_false() -> None:
     form = FormDefinition(fields=[_name(switch(label="OK"), "ok")])
     resp = slack_values_to_response(
         form,
-        _state(ok={
-            "type": "radio_buttons",
-            "selected_option": {"value": "false"},
-        }),
+        _state(
+            ok={
+                "type": "radio_buttons",
+                "selected_option": {"value": "false"},
+            }
+        ),
     )
     assert resp == {"ok": False}
 
@@ -72,18 +71,14 @@ def test_short_text_email_and_blank() -> None:
     assert slack_values_to_response(
         form, _state(e={"type": "email_text_input", "value": "a@b.c"})
     ) == {"e": "a@b.c"}
-    assert slack_values_to_response(
-        form, _state(e={"type": "email_text_input", "value": ""})
-    ) == {"e": None}
+    assert slack_values_to_response(form, _state(e={"type": "email_text_input", "value": ""})) == {
+        "e": None
+    }
 
 
 def test_currency_coerces_to_float() -> None:
-    form = FormDefinition(
-        fields=[_name(currency(currency_code="USD", label="Amt"), "amt")]
-    )
-    resp = slack_values_to_response(
-        form, _state(amt={"type": "number_input", "value": "123.45"})
-    )
+    form = FormDefinition(fields=[_name(currency(currency_code="USD", label="Amt"), "amt")])
+    resp = slack_values_to_response(form, _state(amt={"type": "number_input", "value": "123.45"}))
     assert resp == {"amt": 123.45}
 
 
@@ -97,48 +92,53 @@ def test_long_text() -> None:
 
 
 def test_single_select() -> None:
-    form = FormDefinition(
-        fields=[_name(single_select(options=["a", "b", "c"], label="P"), "p")]
-    )
+    form = FormDefinition(fields=[_name(single_select(options=["a", "b", "c"], label="P"), "p")])
     resp = slack_values_to_response(
         form,
-        _state(p={
-            "type": "static_select",
-            "selected_option": {"value": "b"},
-        }),
+        _state(
+            p={
+                "type": "static_select",
+                "selected_option": {"value": "b"},
+            }
+        ),
     )
     assert resp == {"p": "b"}
 
 
 def test_multi_select_checkboxes() -> None:
-    form = FormDefinition(
-        fields=[_name(multi_select(options=["a", "b", "c"], label="P"), "p")]
-    )
+    form = FormDefinition(fields=[_name(multi_select(options=["a", "b", "c"], label="P"), "p")])
     resp = slack_values_to_response(
         form,
-        _state(p={
-            "type": "checkboxes",
-            "selected_options": [
-                {"value": "a"},
-                {"value": "c"},
-            ],
-        }),
+        _state(
+            p={
+                "type": "checkboxes",
+                "selected_options": [
+                    {"value": "a"},
+                    {"value": "c"},
+                ],
+            }
+        ),
     )
     assert resp == {"p": ["a", "c"]}
 
 
 def test_picture_choice_single_returns_list() -> None:
     form = FormDefinition(
-        fields=[_name(picture_choice(
-            options=[{"value": "a", "label": "A", "image_url": "x"}], label="P"
-        ), "p")]
+        fields=[
+            _name(
+                picture_choice(options=[{"value": "a", "label": "A", "image_url": "x"}], label="P"),
+                "p",
+            )
+        ]
     )
     resp = slack_values_to_response(
         form,
-        _state(p={
-            "type": "static_select",
-            "selected_option": {"value": "a"},
-        }),
+        _state(
+            p={
+                "type": "static_select",
+                "selected_option": {"value": "a"},
+            }
+        ),
     )
     assert resp == {"p": ["a"]}
 
@@ -153,39 +153,35 @@ def test_date_picker() -> None:
 
 
 def test_slider_coerces_to_float() -> None:
-    form = FormDefinition(
-        fields=[_name(slider(min=0, max=10, label="Risk"), "risk")]
-    )
-    resp = slack_values_to_response(
-        form, _state(risk={"type": "number_input", "value": "7"})
-    )
+    form = FormDefinition(fields=[_name(slider(min=0, max=10, label="Risk"), "risk")])
+    resp = slack_values_to_response(form, _state(risk={"type": "number_input", "value": "7"}))
     assert resp == {"risk": 7.0}
 
 
 def test_star_rating_coerces_to_int() -> None:
-    form = FormDefinition(
-        fields=[_name(star_rating(max=5, label="Q"), "q")]
-    )
+    form = FormDefinition(fields=[_name(star_rating(max=5, label="Q"), "q")])
     resp = slack_values_to_response(
         form,
-        _state(q={
-            "type": "static_select",
-            "selected_option": {"value": "4"},
-        }),
+        _state(
+            q={
+                "type": "static_select",
+                "selected_option": {"value": "4"},
+            }
+        ),
     )
     assert resp == {"q": 4}
 
 
 def test_opinion_scale_coerces_to_int() -> None:
-    form = FormDefinition(
-        fields=[_name(opinion_scale(min=1, max=10, label="NPS"), "nps")]
-    )
+    form = FormDefinition(fields=[_name(opinion_scale(min=1, max=10, label="NPS"), "nps")])
     resp = slack_values_to_response(
         form,
-        _state(nps={
-            "type": "static_select",
-            "selected_option": {"value": "9"},
-        }),
+        _state(
+            nps={
+                "type": "static_select",
+                "selected_option": {"value": "9"},
+            }
+        ),
     )
     assert resp == {"nps": 9}
 
@@ -203,10 +199,12 @@ def test_layout_fields_skipped() -> None:
     )
     resp = slack_values_to_response(
         form,
-        _state(ok={
-            "type": "radio_buttons",
-            "selected_option": {"value": "true"},
-        }),
+        _state(
+            ok={
+                "type": "radio_buttons",
+                "selected_option": {"value": "true"},
+            }
+        ),
     )
     assert resp == {"ok": True}
 
@@ -221,9 +219,11 @@ def test_missing_block_yields_none() -> None:
     )
     resp = slack_values_to_response(
         form,
-        _state(ok={
-            "type": "radio_buttons",
-            "selected_option": {"value": "true"},
-        }),
+        _state(
+            ok={
+                "type": "radio_buttons",
+                "selected_option": {"value": "true"},
+            }
+        ),
     )
     assert resp == {"ok": True, "why": None}

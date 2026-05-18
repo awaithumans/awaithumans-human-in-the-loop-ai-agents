@@ -206,9 +206,7 @@ async def list_tasks(
         query = query.where(Task.assigned_to_email.is_(None))
     else:
         if assigned_to_query is not None:
-            matched_user_ids = await _resolve_assignee_search(
-                session, assigned_to_query
-            )
+            matched_user_ids = await _resolve_assignee_search(session, assigned_to_query)
             from sqlalchemy import or_
 
             conditions = [Task.assigned_to_email == assigned_to_query]
@@ -221,9 +219,7 @@ async def list_tasks(
     return list(result.scalars().all())
 
 
-async def _resolve_assignee_search(
-    session: AsyncSession, query: str
-) -> list[str]:
+async def _resolve_assignee_search(session: AsyncSession, query: str) -> list[str]:
     """Find all user IDs matching the broad-search rules in `list_tasks`.
 
     Runs a single query: `email == X OR slack_user_id == X OR

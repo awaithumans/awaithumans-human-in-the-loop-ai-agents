@@ -22,9 +22,10 @@ import pytest
 
 from awaithumans.server.channels.slack.resolution import (
     _HANDLE_CACHE,
+)
+from awaithumans.server.channels.slack.resolution import (
     resolve_slack_target as _resolve_target,
 )
-
 
 # ─── Fakes ───────────────────────────────────────────────────────────
 
@@ -67,15 +68,15 @@ class _FakeClient:
             raise self._users_list_error
         return _FakeResp({"members": self._members})
 
-    async def users_lookupByEmail(self, *, email: str) -> _FakeResp:
+    # Slack SDK uses camelCase here; matching that exactly so this fake
+    # is drop-in for `slack_sdk.web.async_client.AsyncWebClient`.
+    async def users_lookupByEmail(self, *, email: str) -> _FakeResp:  # noqa: N802
         self.calls.append(f"users_lookupByEmail:{email}")
         if self._lookup_by_email_response is None:
             return _FakeResp({"user": {}})
         if email != self._lookup_by_email_response["expected_email"]:
             return _FakeResp({"user": {}})
-        return _FakeResp(
-            {"user": {"id": self._lookup_by_email_response["user_id"]}}
-        )
+        return _FakeResp({"user": {"id": self._lookup_by_email_response["user_id"]}})
 
 
 @pytest.fixture(autouse=True)
@@ -183,15 +184,9 @@ async def test_handle_can_match_display_name_or_real_name() -> None:
             }
         ]
     )
-    assert (
-        await _resolve_target(client=client, target="@alice.singh", team_id=None)
-        == "U_ALICE"
-    )
+    assert await _resolve_target(client=client, target="@alice.singh", team_id=None) == "U_ALICE"
     # real_name with a space — operators rarely do this but it works.
-    assert (
-        await _resolve_target(client=client, target="@Alice Singh", team_id=None)
-        == "U_ALICE"
-    )
+    assert await _resolve_target(client=client, target="@Alice Singh", team_id=None) == "U_ALICE"
 
 
 @pytest.mark.asyncio
@@ -201,10 +196,7 @@ async def test_handle_returns_none_when_not_found() -> None:
             {"id": "U_ALICE", "name": "alice", "is_bot": False, "deleted": False, "profile": {}}
         ]
     )
-    assert (
-        await _resolve_target(client=client, target="@nonexistent", team_id=None)
-        is None
-    )
+    assert await _resolve_target(client=client, target="@nonexistent", team_id=None) is None
 
 
 @pytest.mark.asyncio
@@ -214,7 +206,13 @@ async def test_bots_and_deleted_users_excluded() -> None:
     person."""
     client = _FakeClient(
         members=[
-            {"id": "USLACKBOT", "name": "slackbot", "is_bot": True, "deleted": False, "profile": {}},
+            {
+                "id": "USLACKBOT",
+                "name": "slackbot",
+                "is_bot": True,
+                "deleted": False,
+                "profile": {},
+            },
             {"id": "U_BOT", "name": "mybot", "is_bot": True, "deleted": False, "profile": {}},
             {"id": "U_GHOST", "name": "ghost", "is_bot": False, "deleted": True, "profile": {}},
         ]
@@ -270,9 +268,7 @@ async def test_email_resolves_via_lookup_by_email() -> None:
     users.list — cheaper + has its own rate limit."""
     client = _FakeClient().with_email_lookup("alice@acme.com", "U_ALICE")
 
-    out = await _resolve_target(
-        client=client, target="alice@acme.com", team_id=None
-    )
+    out = await _resolve_target(client=client, target="alice@acme.com", team_id=None)
     assert out == "U_ALICE"
     assert "users_lookupByEmail:alice@acme.com" in client.calls
     # Did NOT fall through to users.list.
@@ -282,7 +278,5 @@ async def test_email_resolves_via_lookup_by_email() -> None:
 @pytest.mark.asyncio
 async def test_unknown_email_returns_none() -> None:
     client = _FakeClient()  # no email lookup configured
-    out = await _resolve_target(
-        client=client, target="ghost@acme.com", team_id=None
-    )
+    out = await _resolve_target(client=client, target="ghost@acme.com", team_id=None)
     assert out is None

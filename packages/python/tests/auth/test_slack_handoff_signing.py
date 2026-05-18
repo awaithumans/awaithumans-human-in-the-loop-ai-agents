@@ -23,7 +23,6 @@ from awaithumans.server.core.slack_handoff import (
     verify_handoff,
 )
 
-
 USER = "user_" + "a" * 28
 TASK = "task_" + "b" * 27
 
@@ -73,9 +72,7 @@ def test_wrong_user_rejected() -> None:
     exp = _far_future()
     sig = sign_handoff(user_id=USER, task_id=TASK, exp_unix=exp)
     with pytest.raises(InvalidHandoffError, match="signature mismatch"):
-        verify_handoff(
-            user_id="other_user", task_id=TASK, exp_unix=exp, signature=sig
-        )
+        verify_handoff(user_id="other_user", task_id=TASK, exp_unix=exp, signature=sig)
 
 
 def test_wrong_task_rejected() -> None:
@@ -84,9 +81,7 @@ def test_wrong_task_rejected() -> None:
     exp = _far_future()
     sig = sign_handoff(user_id=USER, task_id=TASK, exp_unix=exp)
     with pytest.raises(InvalidHandoffError, match="signature mismatch"):
-        verify_handoff(
-            user_id=USER, task_id="other_task", exp_unix=exp, signature=sig
-        )
+        verify_handoff(user_id=USER, task_id="other_task", exp_unix=exp, signature=sig)
 
 
 def test_expiry_in_the_past_rejected() -> None:
@@ -96,25 +91,19 @@ def test_expiry_in_the_past_rejected() -> None:
     expired = int(time.time()) - 1
     sig = sign_handoff(user_id=USER, task_id=TASK, exp_unix=expired)
     with pytest.raises(InvalidHandoffError, match="expired"):
-        verify_handoff(
-            user_id=USER, task_id=TASK, exp_unix=expired, signature=sig
-        )
+        verify_handoff(user_id=USER, task_id=TASK, exp_unix=expired, signature=sig)
 
 
 def test_garbage_signature_rejected() -> None:
     """A non-base64 / wrong-length blob fails fast — no key
     derivation needed."""
     with pytest.raises(InvalidHandoffError):
-        verify_handoff(
-            user_id=USER, task_id=TASK, exp_unix=_far_future(), signature="!!"
-        )
+        verify_handoff(user_id=USER, task_id=TASK, exp_unix=_far_future(), signature="!!")
 
 
 def test_empty_signature_rejected() -> None:
     with pytest.raises(InvalidHandoffError, match="missing signature"):
-        verify_handoff(
-            user_id=USER, task_id=TASK, exp_unix=_far_future(), signature=""
-        )
+        verify_handoff(user_id=USER, task_id=TASK, exp_unix=_far_future(), signature="")
 
 
 def test_signature_wrong_length_rejected() -> None:
@@ -124,6 +113,4 @@ def test_signature_wrong_length_rejected() -> None:
 
     short = base64.urlsafe_b64encode(b"short").decode().rstrip("=")
     with pytest.raises(InvalidHandoffError, match="wrong length"):
-        verify_handoff(
-            user_id=USER, task_id=TASK, exp_unix=_far_future(), signature=short
-        )
+        verify_handoff(user_id=USER, task_id=TASK, exp_unix=_far_future(), signature=short)

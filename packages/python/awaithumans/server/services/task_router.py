@@ -113,7 +113,9 @@ async def resolve_assign_to(
     if picked is None:
         logger.info(
             "No user matched routing filters role=%r access_level=%r pool=%r",
-            role, access_level, pool,
+            role,
+            access_level,
+            pool,
         )
         return RoutingResult(user_id=None, email=None)
 

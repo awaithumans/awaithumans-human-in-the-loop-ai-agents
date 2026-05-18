@@ -48,15 +48,11 @@ async def record_posted_message(
         )
         return
 
-    row = SlackTaskMessage(
-        task_id=task_id, channel=channel, ts=ts, team_id=team_id
-    )
+    row = SlackTaskMessage(task_id=task_id, channel=channel, ts=ts, team_id=team_id)
     session.add(row)
 
 
-async def list_messages_for_task(
-    session: AsyncSession, task_id: str
-) -> list[SlackTaskMessage]:
+async def list_messages_for_task(session: AsyncSession, task_id: str) -> list[SlackTaskMessage]:
     """All Slack messages we've posted for the given task.
 
     The order matches insertion order in practice (PK is monotonic-

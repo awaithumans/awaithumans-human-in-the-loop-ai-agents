@@ -29,9 +29,11 @@ from awaithumans.server.channels.email.templates.palette import (
 @cache
 def _load(name: str) -> Template:
     """Load a template file once and cache it."""
-    text = resources.files(
-        "awaithumans.server.channels.email.templates"
-    ).joinpath("html", name).read_text(encoding="utf-8")
+    text = (
+        resources.files("awaithumans.server.channels.email.templates")
+        .joinpath("html", name)
+        .read_text(encoding="utf-8")
+    )
     return Template(text)
 
 
@@ -59,9 +61,7 @@ def notification_html(
     # `primary` when it's the only call to action so the brand color
     # makes it the obvious next step.
     open_button_style = "neutral" if buttons else "primary"
-    open_task_button = ButtonSpec(
-        label="Open task", url=review_url, style=open_button_style
-    )
+    open_task_button = ButtonSpec(label="Open task", url=review_url, style=open_button_style)
     all_buttons = [*buttons, open_task_button]
     buttons_inner = "".join(render_button(b) for b in all_buttons)
     buttons_section = f'<div style="margin:24px 0;">{buttons_inner}</div>'
@@ -86,14 +86,10 @@ def notification_text(
 ) -> str:
     """Plain-text alternate. Deliverability helper + accessibility."""
     payload_block = (
-        "Payload redacted."
-        if redacted
-        else "\n".join(f"  {k}: {v}" for k, v in payload_lines)
+        "Payload redacted." if redacted else "\n".join(f"  {k}: {v}" for k, v in payload_lines)
     )
     buttons_block = (
-        "Respond:\n" + "\n".join(f"  {b.label}: {b.url}" for b in buttons) + "\n"
-        if buttons
-        else ""
+        "Respond:\n" + "\n".join(f"  {b.label}: {b.url}" for b in buttons) + "\n" if buttons else ""
     )
     return _load("notification.txt").substitute(
         task_title=task_title,
@@ -169,10 +165,7 @@ def _render_payload_html(
 ) -> str:
     """Build the payload-preview fragment for the notification email."""
     if redacted:
-        return (
-            '<p style="color:#555;font-size:13px;">'
-            "<em>Payload redacted.</em></p>"
-        )
+        return '<p style="color:#555;font-size:13px;"><em>Payload redacted.</em></p>'
     if not payload_lines:
         return ""
     rows = "".join(

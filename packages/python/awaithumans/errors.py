@@ -97,8 +97,7 @@ class MarketplaceNotAvailableError(AwaitHumansError):
         super().__init__(
             code="MARKETPLACE_NOT_AVAILABLE",
             message=(
-                "The workforce marketplace (assign_to=MarketplaceAssignment) "
-                "is not yet available."
+                "The workforce marketplace (assign_to=MarketplaceAssignment) is not yet available."
             ),
             hint=(
                 "The marketplace is coming in a future release. For now, assign tasks "
@@ -124,8 +123,7 @@ class TaskNotFoundError(AwaitHumansError):
             code="TASK_NOT_FOUND",
             message=f"Task '{task_id}' not found on the server.",
             hint=(
-                "The task may have been deleted or the server was restarted "
-                "with a fresh database."
+                "The task may have been deleted or the server was restarted with a fresh database."
             ),
             docs_url=f"{DOCS_TROUBLESHOOTING_URL}#task-not-found",
         )
@@ -137,8 +135,7 @@ class TaskCancelledError(AwaitHumansError):
             code="TASK_CANCELLED",
             message=f"Task '{task}' was cancelled.",
             hint=(
-                "The task was cancelled by an admin or another agent before a "
-                "human completed it."
+                "The task was cancelled by an admin or another agent before a human completed it."
             ),
             docs_url=f"{DOCS_TROUBLESHOOTING_URL}#task-cancelled",
         )

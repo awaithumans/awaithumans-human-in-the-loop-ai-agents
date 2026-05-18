@@ -55,10 +55,13 @@ def verify_signature(
         return False
 
     basestring = b"v0:" + timestamp.encode() + b":" + body
-    expected = "v0=" + hmac.new(
-        signing_secret.encode(),
-        basestring,
-        hashlib.sha256,
-    ).hexdigest()
+    expected = (
+        "v0="
+        + hmac.new(
+            signing_secret.encode(),
+            basestring,
+            hashlib.sha256,
+        ).hexdigest()
+    )
 
     return hmac.compare_digest(expected, signature)

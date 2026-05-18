@@ -25,9 +25,7 @@ from awaithumans.types import TaskStatus
 from awaithumans.utils.constants import TERMINAL_STATUSES_SET
 
 
-async def get_task_stats(
-    session: AsyncSession, *, window_days: int = 30
-) -> TaskStats:
+async def get_task_stats(session: AsyncSession, *, window_days: int = 30) -> TaskStats:
     now = datetime.now(timezone.utc)
     window_start = now - timedelta(days=window_days)
 
@@ -42,9 +40,7 @@ async def get_task_stats(
     # "of tasks that ever finished, how many did a human actually complete".
     terminal_count = sum(totals.get(s.value, 0) for s in TERMINAL_STATUSES_SET)
     completed_count = totals.get(TaskStatus.COMPLETED.value, 0)
-    completion_rate: float | None = (
-        completed_count / terminal_count if terminal_count > 0 else None
-    )
+    completion_rate: float | None = completed_count / terminal_count if terminal_count > 0 else None
 
     return TaskStats(
         window_days=window_days,

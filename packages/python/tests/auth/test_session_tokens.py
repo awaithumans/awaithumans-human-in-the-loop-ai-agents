@@ -20,7 +20,6 @@ from awaithumans.server.core.auth import (
 )
 from awaithumans.utils.constants import HMAC_SHA256_DIGEST_BYTES
 
-
 # Stable user ID to sign tokens against — matches the format new_id()
 # produces (32 hex chars). Not inserted in DB; these tests stay at the
 # cookie layer.

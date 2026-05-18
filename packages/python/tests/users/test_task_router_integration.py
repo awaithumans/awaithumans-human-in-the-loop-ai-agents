@@ -84,12 +84,8 @@ async def test_fairness_across_two_tasks(session: AsyncSession) -> None:
     a = await create_user(session, email="a@x.com", role="kyc")
     b = await create_user(session, email="b@x.com", role="kyc")
 
-    t1 = await _create(
-        session, idempotency_key="t1", assign_to={"role": "kyc"}
-    )
-    t2 = await _create(
-        session, idempotency_key="t2", assign_to={"role": "kyc"}
-    )
+    t1 = await _create(session, idempotency_key="t1", assign_to={"role": "kyc"})
+    t2 = await _create(session, idempotency_key="t2", assign_to={"role": "kyc"})
 
     assigned = {t1.assigned_to_user_id, t2.assigned_to_user_id}
     assert assigned == {a.id, b.id}
@@ -101,13 +97,9 @@ async def test_slack_only_user_assigned_with_null_email(
 ) -> None:
     """Slack-only users get tasks assigned to them — `assigned_to_email`
     stays null but `assigned_to_user_id` points at them."""
-    u = await create_user(
-        session, slack_team_id="T01", slack_user_id="U01", role="kyc"
-    )
+    u = await create_user(session, slack_team_id="T01", slack_user_id="U01", role="kyc")
 
-    task = await _create(
-        session, idempotency_key="slack-task", assign_to={"role": "kyc"}
-    )
+    task = await _create(session, idempotency_key="slack-task", assign_to={"role": "kyc"})
     assert task.assigned_to_email is None
     assert task.assigned_to_user_id == u.id
 
@@ -120,9 +112,7 @@ async def test_idempotency_key_dedups_before_routing(
     must NOT run twice and advance the user's counter unfairly."""
     a = await create_user(session, email="a@x.com", role="kyc")
 
-    t1 = await _create(
-        session, idempotency_key="shared", assign_to={"role": "kyc"}
-    )
+    t1 = await _create(session, idempotency_key="shared", assign_to={"role": "kyc"})
     assert t1.assigned_to_user_id == a.id
 
     # Capture the user's last_assigned_at after the first task.
@@ -132,9 +122,7 @@ async def test_idempotency_key_dedups_before_routing(
 
     # Second create with same idempotency key — should return the
     # same task without bumping the user's timestamp.
-    t2 = await _create(
-        session, idempotency_key="shared", assign_to={"role": "kyc"}
-    )
+    t2 = await _create(session, idempotency_key="shared", assign_to={"role": "kyc"})
     assert t2.id == t1.id
 
     await session.refresh(a)

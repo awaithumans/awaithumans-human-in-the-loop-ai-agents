@@ -17,7 +17,6 @@ from awaithumans.server.db.models import User
 
 from .conftest import OPERATOR_EMAIL, OPERATOR_PASSWORD
 
-
 # `_reset_rate_limit` autouse fixture lives in tests/auth/conftest.py
 # so every test in this package gets a clean limiter state.
 

@@ -17,9 +17,7 @@ from awaithumans.server.services.service_key_service import (
 
 
 def list_service_keys(
-    include_revoked: bool = typer.Option(
-        False, "--all", help="Include revoked keys."
-    ),
+    include_revoked: bool = typer.Option(False, "--all", help="Include revoked keys."),
 ) -> None:
     """List service API keys."""
 
@@ -28,13 +26,13 @@ def list_service_keys(
             rows = await _list(session, include_revoked=include_revoked)
 
         if not rows:
-            typer.echo("No service keys yet. Create one with `awaithumans create-service-key --name <name>`.")
+            typer.echo(
+                "No service keys yet. "
+                "Create one with `awaithumans create-service-key --name <name>`."
+            )
             return
 
-        header = (
-            f"{'ID':<32}  {'NAME':<30}  {'PREFIX':<14}  "
-            f"{'CREATED':<25}  STATUS"
-        )
+        header = f"{'ID':<32}  {'NAME':<30}  {'PREFIX':<14}  {'CREATED':<25}  STATUS"
         typer.echo(header)
         typer.echo("-" * len(header))
         for r in rows:

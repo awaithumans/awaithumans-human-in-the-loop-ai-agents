@@ -12,25 +12,43 @@ import pytest
 
 from awaithumans.forms import (
     FormDefinition,
+    SectionCollapse,
     SelectOption,
+    Subform,
     TableColumn,
-    # Classes
-    DisplayText, ShortText, LongText, RichText,
-    Switch, SingleSelect, MultiSelect, PictureChoice,
-    Slider, StarRating, OpinionScale, Ranking,
-    DatePicker, DateTimePicker, DateRange, TimePicker,
-    FileUpload, Signature, Image, Video, PdfViewer, HtmlBlock,
-    Section, Divider, SectionCollapse,
-    Table, Subform,
+    currency,
+    date_picker,
+    date_range,
+    datetime_picker,
     # Helpers
-    display_text, short_text, long_text, rich_text,
-    email, url, phone, currency, password,
-    switch, single_select, multi_select, picture_choice,
-    slider, star_rating, opinion_scale, ranking,
-    date_picker, datetime_picker, date_range, time_picker,
-    file_upload, signature, image, video, pdf_viewer, html,
-    section, divider, section_collapse,
-    table, subform,
+    display_text,
+    divider,
+    email,
+    file_upload,
+    html,
+    image,
+    long_text,
+    multi_select,
+    opinion_scale,
+    password,
+    pdf_viewer,
+    phone,
+    picture_choice,
+    ranking,
+    rich_text,
+    section,
+    section_collapse,
+    short_text,
+    signature,
+    single_select,
+    slider,
+    star_rating,
+    subform,
+    switch,
+    table,
+    time_picker,
+    url,
+    video,
 )
 
 
@@ -125,7 +143,11 @@ def test_unknown_option_type_raises() -> None:
 def test_discriminator_enforced() -> None:
     """Deserialization fails if `kind` is wrong or missing."""
     bad = '{"version": 1, "fields": [{"kind": "nonexistent", "name": "x"}]}'
-    with pytest.raises(Exception):
+    # Pydantic raises ValidationError but we only care that SOMETHING
+    # bubbles up — the model_validate_json contract is "fail loudly on
+    # bad input." Pinning ValidationError ties this test to a Pydantic
+    # implementation detail with no reader benefit.
+    with pytest.raises(Exception):  # noqa: B017
         FormDefinition.model_validate_json(bad)
 
 

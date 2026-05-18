@@ -138,9 +138,7 @@ async def _resolve_by_handle(
     return cached.get(needle)
 
 
-async def _build_handle_index(
-    *, client: AsyncWebClient, cache_key: str
-) -> dict[str, str] | None:
+async def _build_handle_index(*, client: AsyncWebClient, cache_key: str) -> dict[str, str] | None:
     """Walk `users.list` once, build a {handle_lower: user_id} map.
 
     Skips bots, deleted users, and the Slackbot pseudo-user. Indexes

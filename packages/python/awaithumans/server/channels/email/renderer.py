@@ -68,12 +68,8 @@ def _review_url_for_recipient(
 
     from awaithumans.server.core.email_handoff import sign_handoff
 
-    sig = sign_handoff(
-        recipient=recipient, task_id=task_id, exp_unix=handoff_exp_unix
-    )
-    qs = urllib.parse.urlencode(
-        {"to": recipient, "t": task_id, "e": handoff_exp_unix, "s": sig}
-    )
+    sig = sign_handoff(recipient=recipient, task_id=task_id, exp_unix=handoff_exp_unix)
+    qs = urllib.parse.urlencode({"to": recipient, "t": task_id, "e": handoff_exp_unix, "s": sig})
     return f"{public_url.rstrip('/')}/api/auth/email-handoff?{qs}"
 
 
@@ -157,9 +153,7 @@ def _buttons_for_form(
     return []
 
 
-def _payload_lines(
-    payload: dict[str, Any] | None, redacted: bool
-) -> list[tuple[str, str]]:
+def _payload_lines(payload: dict[str, Any] | None, redacted: bool) -> list[tuple[str, str]]:
     if not payload or redacted:
         return []
     lines: list[tuple[str, str]] = []
@@ -201,9 +195,7 @@ def build_notification_email(
         recipient=to,
         handoff_exp_unix=handoff_exp_unix,
     )
-    buttons = _buttons_for_form(
-        form, task_id=task_id, recipient=to, public_url=public_url
-    )
+    buttons = _buttons_for_form(form, task_id=task_id, recipient=to, public_url=public_url)
     lines = _payload_lines(task_payload, redact_payload)
 
     html = notification_html(

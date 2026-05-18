@@ -22,7 +22,6 @@ from awaithumans.server.app import create_app
 from awaithumans.server.channels.slack import client as client_module
 from awaithumans.server.core import encryption
 from awaithumans.server.core.config import settings
-from awaithumans.server.core.password import hash_password
 from awaithumans.server.db.connection import get_session
 from awaithumans.server.db.models import (  # noqa: F401 — register
     AuditEntry,

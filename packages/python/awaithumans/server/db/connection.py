@@ -9,11 +9,11 @@ import logging
 from collections.abc import AsyncGenerator
 from pathlib import Path
 
-from alembic import command
-from alembic.config import Config as AlembicConfig
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
 
+from alembic import command
+from alembic.config import Config as AlembicConfig
 from awaithumans.server.core.config import settings
 
 logger = logging.getLogger("awaithumans.server.db")

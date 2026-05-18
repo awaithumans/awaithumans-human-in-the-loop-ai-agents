@@ -27,10 +27,7 @@ def slider_element(field: Slider) -> dict[str, Any]:
 
 
 def star_rating_element(field: StarRating) -> dict[str, Any]:
-    options = [
-        option(str(v), "★" * v + "☆" * (field.max - v))
-        for v in range(1, field.max + 1)
-    ]
+    options = [option(str(v), "★" * v + "☆" * (field.max - v)) for v in range(1, field.max + 1)]
     elem: dict[str, Any] = {
         "type": "static_select",
         "action_id": field.name,
@@ -48,10 +45,7 @@ def opinion_scale_element(field: OpinionScale) -> dict[str, Any]:
     labels_suffix = ""
     if field.min_label and field.max_label:
         labels_suffix = f" ({field.min_label} → {field.max_label})"
-    options = [
-        option(str(v), f"{v}{labels_suffix if v == field.min else ''}")
-        for v in values
-    ]
+    options = [option(str(v), f"{v}{labels_suffix if v == field.min else ''}") for v in values]
     elem: dict[str, Any] = {
         "type": "static_select",
         "action_id": field.name,

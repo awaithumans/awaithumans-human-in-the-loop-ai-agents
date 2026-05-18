@@ -221,9 +221,11 @@ async def test_resend_send_failure_raises() -> None:
             return {"error": "unauthorized"}
 
     fake_post = AsyncMock(return_value=FakeResp())
-    with patch("httpx.AsyncClient.post", fake_post):
-        with pytest.raises(EmailTransportError, match="HTTP 401"):
-            await t.send(msg)
+    with (
+        patch("httpx.AsyncClient.post", fake_post),
+        pytest.raises(EmailTransportError, match="HTTP 401"),
+    ):
+        await t.send(msg)
 
 
 def test_resend_requires_api_key_construction() -> None:

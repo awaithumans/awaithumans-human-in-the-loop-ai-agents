@@ -74,9 +74,7 @@ async def test_list_requires_admin_token(client: AsyncClient) -> None:
 
 @pytest.mark.asyncio
 async def test_wrong_token_rejected(client: AsyncClient) -> None:
-    resp = await client.get(
-        "/api/admin/users", headers={"X-Admin-Token": "nope"}
-    )
+    resp = await client.get("/api/admin/users", headers={"X-Admin-Token": "nope"})
     assert resp.status_code == 401
 
 
@@ -121,12 +119,8 @@ async def test_create_no_address_returns_422(client: AsyncClient) -> None:
 
 @pytest.mark.asyncio
 async def test_create_duplicate_email_returns_409(client: AsyncClient) -> None:
-    await client.post(
-        "/api/admin/users", headers=AUTH, json={"email": "a@example.com"}
-    )
-    resp = await client.post(
-        "/api/admin/users", headers=AUTH, json={"email": "a@example.com"}
-    )
+    await client.post("/api/admin/users", headers=AUTH, json={"email": "a@example.com"})
+    resp = await client.post("/api/admin/users", headers=AUTH, json={"email": "a@example.com"})
     assert resp.status_code == 409
     assert resp.json()["error"] == "USER_ALREADY_EXISTS"
 
@@ -160,9 +154,7 @@ async def test_list_users_filter_by_role(client: AsyncClient) -> None:
 @pytest.mark.asyncio
 async def test_get_user_by_id(client: AsyncClient) -> None:
     created = (
-        await client.post(
-            "/api/admin/users", headers=AUTH, json={"email": "a@example.com"}
-        )
+        await client.post("/api/admin/users", headers=AUTH, json={"email": "a@example.com"})
     ).json()
 
     resp = await client.get(f"/api/admin/users/{created['id']}", headers=AUTH)
@@ -180,9 +172,7 @@ async def test_get_missing_returns_404(client: AsyncClient) -> None:
 @pytest.mark.asyncio
 async def test_patch_user_updates_fields(client: AsyncClient) -> None:
     created = (
-        await client.post(
-            "/api/admin/users", headers=AUTH, json={"email": "a@example.com"}
-        )
+        await client.post("/api/admin/users", headers=AUTH, json={"email": "a@example.com"})
     ).json()
 
     resp = await client.patch(
@@ -199,9 +189,7 @@ async def test_patch_user_updates_fields(client: AsyncClient) -> None:
 @pytest.mark.asyncio
 async def test_delete_user_removes_row(client: AsyncClient) -> None:
     created = (
-        await client.post(
-            "/api/admin/users", headers=AUTH, json={"email": "a@example.com"}
-        )
+        await client.post("/api/admin/users", headers=AUTH, json={"email": "a@example.com"})
     ).json()
 
     resp = await client.delete(f"/api/admin/users/{created['id']}", headers=AUTH)
@@ -217,9 +205,7 @@ async def test_delete_user_removes_row(client: AsyncClient) -> None:
 @pytest.mark.asyncio
 async def test_set_password_flips_has_password(client: AsyncClient) -> None:
     created = (
-        await client.post(
-            "/api/admin/users", headers=AUTH, json={"email": "a@example.com"}
-        )
+        await client.post("/api/admin/users", headers=AUTH, json={"email": "a@example.com"})
     ).json()
     assert created["has_password"] is False
 
@@ -243,8 +229,6 @@ async def test_clear_password_flips_has_password(client: AsyncClient) -> None:
     ).json()
     assert created["has_password"] is True
 
-    resp = await client.delete(
-        f"/api/admin/users/{created['id']}/password", headers=AUTH
-    )
+    resp = await client.delete(f"/api/admin/users/{created['id']}/password", headers=AUTH)
     assert resp.status_code == 200
     assert resp.json()["has_password"] is False

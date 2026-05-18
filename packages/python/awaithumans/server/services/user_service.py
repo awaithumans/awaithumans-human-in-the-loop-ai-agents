@@ -83,9 +83,7 @@ async def create_user(
     active: bool = True,
 ) -> User:
     """Insert a new user. Raises UserAlreadyExistsError on uniqueness conflict."""
-    _validate_addresses(
-        email=email, slack_team_id=slack_team_id, slack_user_id=slack_user_id
-    )
+    _validate_addresses(email=email, slack_team_id=slack_team_id, slack_user_id=slack_user_id)
 
     row = User(
         display_name=display_name,
@@ -188,8 +186,15 @@ async def update_user(
         row.password_hash = hash_password(pw) if pw else None
 
     updatable = {
-        "display_name", "email", "slack_team_id", "slack_user_id",
-        "role", "access_level", "pool", "is_operator", "active",
+        "display_name",
+        "email",
+        "slack_team_id",
+        "slack_user_id",
+        "role",
+        "access_level",
+        "pool",
+        "is_operator",
+        "active",
         "password_hash",
     }
     for k, v in changes.items():
@@ -212,9 +217,7 @@ async def update_user(
     return row
 
 
-async def set_password(
-    session: AsyncSession, user_id: str, password: str | None
-) -> User:
+async def set_password(session: AsyncSession, user_id: str, password: str | None) -> User:
     """Set or clear a user's password.
 
     Passing None clears the hash — the user can no longer log in but

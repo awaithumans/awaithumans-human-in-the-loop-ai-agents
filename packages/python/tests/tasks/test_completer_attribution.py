@@ -20,26 +20,21 @@ These tests pin:
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Iterator
 
 import pytest
 from fastapi.testclient import TestClient
 
-from awaithumans.server.app import create_app
 from awaithumans.server.db.models import User
 from awaithumans.server.services.user_service import create_user
-from awaithumans.utils.constants import DASHBOARD_SESSION_COOKIE_NAME
-
 from tests.tasks.test_route_authorization import (  # fixture re-exports
     REVIEWER_EMAIL,
     REVIEWER_PASSWORD,
     _admin_headers,
     _login,
     _make_task,
-    client,  # noqa: F401
+    client,  # noqa: F401  # re-exported so pytest discovers it as a fixture here
     reviewer_user,  # noqa: F401
 )
-
 
 # ─── Fixtures ────────────────────────────────────────────────────────
 
@@ -71,9 +66,7 @@ def slack_only_user(operator_user: User) -> User:
 # ─── Tests ───────────────────────────────────────────────────────────
 
 
-def test_dashboard_completion_stamps_user_id(
-    client: TestClient, reviewer_user: User
-) -> None:
+def test_dashboard_completion_stamps_user_id(client: TestClient, reviewer_user: User) -> None:  # noqa: F811
     """Reviewer logs in, completes a task assigned to them via the
     dashboard. The follow-up GET shows their email AND user_id
     (so a Slack-only completer would also light up)."""
@@ -97,7 +90,8 @@ def test_dashboard_completion_stamps_user_id(
 
 
 def test_slack_only_completer_renders_display_name(
-    client: TestClient, slack_only_user: User
+    client: TestClient,  # noqa: F811
+    slack_only_user: User,
 ) -> None:
     """Stamp `completed_by_user_id` directly via the service (the
     dashboard route can't sign Slack-only users in without the
@@ -148,7 +142,8 @@ def test_slack_only_completer_renders_display_name(
 
 
 def test_completed_by_falls_back_to_slack_id_when_no_display_name(
-    client: TestClient, operator_user: User
+    client: TestClient,  # noqa: F811
+    operator_user: User,
 ) -> None:
     """A Slack-only user without `display_name` set should render
     as `@<slack_user_id>` — same fallback the user-form picker uses
@@ -199,7 +194,5 @@ def test_completed_by_falls_back_to_slack_id_when_no_display_name(
 
     asyncio.new_event_loop().run_until_complete(_complete())
 
-    body = client.get(
-        f"/api/tasks/{task_id}", headers=_admin_headers()
-    ).json()
+    body = client.get(f"/api/tasks/{task_id}", headers=_admin_headers()).json()
     assert body["completed_by_display_name"] == "@U_NO_NAME"

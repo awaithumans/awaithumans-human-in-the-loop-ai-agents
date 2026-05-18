@@ -6,7 +6,7 @@ from pydantic import BaseModel
 
 
 class TaskStatsByDay(BaseModel):
-    date: str        # YYYY-MM-DD
+    date: str  # YYYY-MM-DD
     created: int
     completed: int
 

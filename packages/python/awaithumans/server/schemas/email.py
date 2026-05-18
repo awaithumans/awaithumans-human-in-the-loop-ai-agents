@@ -18,7 +18,7 @@ class IdentityCreateRequest(BaseModel):
     from_email: str
     from_name: str | None = None
     reply_to: str | None = None
-    transport: str                    # "resend" | "smtp" | "logging" | "noop" | "file"
+    transport: str  # "resend" | "smtp" | "logging" | "noop" | "file"
     transport_config: dict[str, Any]  # kind-specific (api_key, host, port, dir, ...)
 
 

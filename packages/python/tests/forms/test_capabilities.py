@@ -25,14 +25,33 @@ from awaithumans.forms import (
 # The kinds present in the discriminated union. Kept here as a hard-coded list
 # so a missing primitive in CAPABILITIES is caught at test time.
 ALL_KINDS = {
-    "display_text", "short_text", "long_text", "rich_text",
-    "switch", "single_select", "multi_select", "picture_choice",
-    "slider", "star_rating", "opinion_scale", "ranking",
-    "date", "datetime", "date_range", "time",
-    "file_upload", "signature",
-    "image", "video", "pdf_viewer", "html",
-    "section", "divider", "section_collapse",
-    "table", "subform",
+    "display_text",
+    "short_text",
+    "long_text",
+    "rich_text",
+    "switch",
+    "single_select",
+    "multi_select",
+    "picture_choice",
+    "slider",
+    "star_rating",
+    "opinion_scale",
+    "ranking",
+    "date",
+    "datetime",
+    "date_range",
+    "time",
+    "file_upload",
+    "signature",
+    "image",
+    "video",
+    "pdf_viewer",
+    "html",
+    "section",
+    "divider",
+    "section_collapse",
+    "table",
+    "subform",
 }
 
 
@@ -44,9 +63,7 @@ def test_capabilities_cover_every_primitive_and_channel() -> None:
 
 
 def test_simple_form_renders_everywhere() -> None:
-    form = FormDefinition(
-        fields=[switch(label="approve"), long_text(label="comment")]
-    )
+    form = FormDefinition(fields=[switch(label="approve"), long_text(label="comment")])
     assert form_renders_in(form, "dashboard") is True
     assert form_renders_in(form, "slack") is True
     assert form_renders_in(form, "email_interactive") is False  # long_text → link-out in email
@@ -75,7 +92,9 @@ def test_recursive_children_are_checked() -> None:
 def test_section_collapse_children_checked() -> None:
     form = FormDefinition(
         fields=[
-            section_collapse("group", fields=[short_text(label="ok"), signature(label="inside_sig")]),
+            section_collapse(
+                "group", fields=[short_text(label="ok"), signature(label="inside_sig")]
+            ),
         ]
     )
     offenders = unsupported_fields(form, "slack")

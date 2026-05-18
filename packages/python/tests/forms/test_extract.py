@@ -9,14 +9,13 @@ Covers:
 
 from __future__ import annotations
 
-from typing import Annotated, Optional
+from typing import Annotated
 
 from pydantic import BaseModel, Field
 
 from awaithumans.forms import (
     LongText,
     Signature,
-    SingleSelect,
     Switch,
     extract_form,
     long_text,
@@ -27,9 +26,9 @@ from awaithumans.forms import (
 
 class _WireApproval(BaseModel):
     approve: Annotated[bool, switch(label="Approve this wire?")]
-    comment: Annotated[Optional[str], long_text(label="Reason")] = None
+    comment: Annotated[str | None, long_text(label="Reason")] = None
     # Optional field without any Annotated metadata — falls back to inference.
-    notes: Optional[str] = None
+    notes: str | None = None
 
 
 def test_annotated_primitives_are_used() -> None:

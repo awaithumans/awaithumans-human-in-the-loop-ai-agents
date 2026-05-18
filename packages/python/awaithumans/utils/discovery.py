@@ -70,9 +70,7 @@ def _is_process_alive(pid: int) -> bool:
         return True
 
 
-def write_discovery(
-    *, host: str, port: int, admin_token: str | None = None
-) -> None:
+def write_discovery(*, host: str, port: int, admin_token: str | None = None) -> None:
     """Write the server's bound URL (and optional admin token) to the
     discovery file.
 
@@ -101,10 +99,8 @@ def write_discovery(
         # Restrict perms whenever the file carries a secret. Best-
         # effort on systems that don't honor chmod.
         if admin_token:
-            try:
+            with suppress(OSError):
                 path.chmod(0o600)
-            except OSError:
-                pass
         logger.info("Wrote discovery file at %s (url=%s)", path, data["url"])
     except OSError as e:
         logger.warning("Failed to write discovery file at %s: %s", path, e)

@@ -299,7 +299,10 @@ async def _handle_claim(
     if not task_id or not trigger_id or not team_id or not slack_user_id:
         logger.warning(
             "claim: missing field (task_id=%s, trigger_id=%s, team=%s, user=%s)",
-            task_id, trigger_id, team_id, slack_user_id,
+            task_id,
+            trigger_id,
+            team_id,
+            slack_user_id,
         )
         return
 
@@ -403,9 +406,7 @@ async def _handle_claim(
     )
 
 
-async def _display_for_user_id(
-    session: AsyncSession, user_id: str | None
-) -> str:
+async def _display_for_user_id(session: AsyncSession, user_id: str | None) -> str:
     """Human-readable label for the user who won a claim race."""
     if not user_id:
         return "another user"
@@ -456,9 +457,7 @@ async def _ephemeral_reply(
 
     if channel:
         try:
-            await client.chat_postEphemeral(
-                channel=channel, user=user_id, text=text
-            )
+            await client.chat_postEphemeral(channel=channel, user=user_id, text=text)
         except SlackApiError as exc:
             # `not_in_channel` / `missing_scope` / token revoked all
             # surface here; the route still completes successfully

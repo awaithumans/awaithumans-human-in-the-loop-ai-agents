@@ -24,7 +24,6 @@ from awaithumans.server.services.task_router import (
 )
 from awaithumans.server.services.user_service import create_user, get_user
 
-
 # ─── Null / unroutable inputs ─────────────────────────────────────────
 
 
@@ -54,9 +53,7 @@ async def test_marketplace_stub_returns_empty(session: AsyncSession) -> None:
 
 @pytest.mark.asyncio
 async def test_explicit_email_known_user(session: AsyncSession) -> None:
-    u = await create_user(
-        session, email="alice@example.com", role="reviewer"
-    )
+    u = await create_user(session, email="alice@example.com", role="reviewer")
     result = await resolve_assign_to(session, {"email": "alice@example.com"})
     assert result.user_id == u.id
     assert result.email == "alice@example.com"
@@ -81,12 +78,8 @@ async def test_role_filter_picks_active_matching_user(
     session: AsyncSession,
 ) -> None:
     # Inactive user should be skipped even if they match the role.
-    await create_user(
-        session, email="inactive@x.com", role="kyc", active=False
-    )
-    picked_user = await create_user(
-        session, email="active@x.com", role="kyc"
-    )
+    await create_user(session, email="inactive@x.com", role="kyc", active=False)
+    picked_user = await create_user(session, email="active@x.com", role="kyc")
 
     result = await resolve_assign_to(session, {"role": "kyc"})
     assert result.user_id == picked_user.id
@@ -146,9 +139,7 @@ async def test_access_level_and_pool_filters_compose(
         session, email="s@x.com", role="kyc", access_level="senior", pool="ops"
     )
     # Correct role + access_level + wrong pool — excluded.
-    await create_user(
-        session, email="s2@x.com", role="kyc", access_level="senior", pool="fraud"
-    )
+    await create_user(session, email="s2@x.com", role="kyc", access_level="senior", pool="fraud")
 
     result = await resolve_assign_to(
         session, {"role": "kyc", "access_level": "senior", "pool": "ops"}

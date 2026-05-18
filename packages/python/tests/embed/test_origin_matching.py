@@ -26,12 +26,11 @@ from awaithumans.server.services.embed_token_service import (
     parse_origin_allowlist,
 )
 
-
 # ── 1. Whitespace stripping and empty entry dropping ──────────────────────
 
 
 def test_parse_strips_whitespace_and_drops_empty_entries() -> None:
-    """Whitespace around entries is stripped; blank entries (from trailing comma etc.) are skipped."""
+    """Whitespace around entries is stripped; blank entries (trailing comma etc.) are skipped."""
     result = parse_origin_allowlist("  https://app.acme.com  ,  , https://staging.acme.com  ")
     assert result == ("https://app.acme.com", "https://staging.acme.com")
 

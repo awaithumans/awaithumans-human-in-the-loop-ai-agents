@@ -40,8 +40,6 @@ from awaithumans.adapters.temporal import (
 )
 from awaithumans.errors import (
     TaskCancelledError,
-    TaskTimeoutError,
-    VerificationExhaustedError,
 )
 from awaithumans.server.core import encryption
 from awaithumans.server.core.config import settings
@@ -281,9 +279,7 @@ async def test_await_human_returns_response_after_signal(
                 task_queue="test-q",
             )
 
-            idem = adapter._default_idempotency_key(
-                "Approve refund?", _Payload(amount=100)
-            )
+            idem = adapter._default_idempotency_key("Approve refund?", _Payload(amount=100))
             signal = adapter._signal_name(idem)
             await asyncio.sleep(0.5)  # let workflow register handler
             await handle.signal(
@@ -327,12 +323,8 @@ async def test_await_human_raises_typed_error_on_cancelled_status(
             activities=[fake_create],
         ):
             wf_id = f"wf-{uuid.uuid4()}"
-            handle = await client.start_workflow(
-                _CancelWorkflow.run, id=wf_id, task_queue="test-q"
-            )
-            idem = adapter._default_idempotency_key(
-                "Approve refund?", _Payload(amount=100)
-            )
+            handle = await client.start_workflow(_CancelWorkflow.run, id=wf_id, task_queue="test-q")
+            idem = adapter._default_idempotency_key("Approve refund?", _Payload(amount=100))
             await asyncio.sleep(0.5)
             await handle.signal(
                 adapter._signal_name(idem),

@@ -22,15 +22,16 @@ from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
 from sqlmodel import SQLModel
 
+from awaithumans.server.app import create_app
+from awaithumans.server.core.config import settings
+from awaithumans.server.db.connection import get_session
+
 # Register models
 from awaithumans.server.db.models import (  # noqa: F401
     AuditEntry,
     SlackInstallation,
     Task,
 )
-from awaithumans.server.app import create_app
-from awaithumans.server.core.config import settings
-from awaithumans.server.db.connection import get_session
 
 INSTALL_TOKEN = "test-install-token-super-secret"
 CLIENT_ID = "test-client-id"
@@ -152,9 +153,7 @@ async def test_callback_rejects_state_cookie_mismatch(
     oauth_client: AsyncClient,
 ) -> None:
     """Cookie present but different from state param → reject (CSRF defense)."""
-    oauth_client.cookies.set(
-        "awaithumans_slack_oauth_state", "different-state-value"
-    )
+    oauth_client.cookies.set("awaithumans_slack_oauth_state", "different-state-value")
     resp = await oauth_client.get(
         "/api/channels/slack/oauth/callback",
         params={"code": "x", "state": "attacker-minted-state"},

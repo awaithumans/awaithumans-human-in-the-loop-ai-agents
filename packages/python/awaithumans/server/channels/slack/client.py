@@ -43,9 +43,7 @@ def _build_client(token: str) -> AsyncWebClient | None:
     try:
         from slack_sdk.web.async_client import AsyncWebClient
     except ImportError:
-        logger.error(
-            "slack_sdk not installed. Install with: pip install \"awaithumans[server]\""
-        )
+        logger.error('slack_sdk not installed. Install with: pip install "awaithumans[server]"')
         return None
     return AsyncWebClient(token=token)
 
@@ -57,9 +55,7 @@ def get_env_client() -> AsyncWebClient | None:
     return _build_client(settings.SLACK_BOT_TOKEN)
 
 
-async def get_client_for_team(
-    session: AsyncSession, team_id: str | None
-) -> AsyncWebClient | None:
+async def get_client_for_team(session: AsyncSession, team_id: str | None) -> AsyncWebClient | None:
     """Return the client for a specific Slack workspace.
 
     Order: installation for team_id → env token fallback → None.

@@ -39,7 +39,6 @@ from awaithumans.server.db.models import (  # noqa: F401 — registers metadata
 )
 from awaithumans.types import TaskStatus
 
-
 # ─── Fakes ───────────────────────────────────────────────────────────
 
 
@@ -58,9 +57,7 @@ class _FakeClient:
         text: str,
         blocks: list[dict[str, Any]],
     ) -> dict[str, Any]:
-        self.calls.append(
-            {"channel": channel, "ts": ts, "text": text, "blocks": blocks}
-        )
+        self.calls.append({"channel": channel, "ts": ts, "text": text, "blocks": blocks})
         if self._fail is not None:
             raise self._fail
         return {"ok": True}
@@ -228,6 +225,4 @@ async def test_posted_blocks_have_no_action_buttons(session_and_factory) -> None
     for block in call["blocks"]:
         for element in block.get("elements", []):
             if "action_id" in element and "url" not in element:
-                raise AssertionError(
-                    f"Terminal block has interactive element: {element}"
-                )
+                raise AssertionError(f"Terminal block has interactive element: {element}")

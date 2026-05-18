@@ -23,6 +23,6 @@ class SystemStatus(BaseModel):
     admin_token_enabled: bool
 
     # Channels — each value is a mode the operator picked. Not the keys.
-    slack_mode: str   # "off" | "single-workspace" | "multi-workspace"
-    email_transport: str | None   # "resend" | "smtp" | "logging" | "noop" | None
+    slack_mode: str  # "off" | "single-workspace" | "multi-workspace"
+    email_transport: str | None  # "resend" | "smtp" | "logging" | "noop" | None
     email_from: str | None

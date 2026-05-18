@@ -219,8 +219,7 @@ async def slack_handoff(
         logger.info("Slack handoff rejected: user=%s missing/inactive", u)
         raise HTTPException(
             status_code=403,
-            detail="That user is no longer active. Ask an operator to "
-            "re-add you to the directory.",
+            detail="That user is no longer active. Ask an operator to re-add you to the directory.",
         )
 
     token = sign_session(user_id=user.id, is_operator=user.is_operator)
@@ -311,9 +310,7 @@ async def email_handoff(
         # Don't auto-reactivate — the operator may have deliberately
         # taken this user offline. Same response shape as the Slack
         # handoff so attackers probing user state get a uniform 403.
-        logger.info(
-            "Email handoff rejected: user=%s inactive", normalized_email
-        )
+        logger.info("Email handoff rejected: user=%s inactive", normalized_email)
         raise HTTPException(
             status_code=403,
             detail="That reviewer is no longer active. Ask an operator "
@@ -344,9 +341,7 @@ async def email_handoff(
         samesite="lax",
         path="/",
     )
-    logger.info(
-        "Email handoff: signed in user=%s for task=%s", user.id, t
-    )
+    logger.info("Email handoff: signed in user=%s for task=%s", user.id, t)
     return response
 
 

@@ -131,20 +131,14 @@ async def test_identity_full_lifecycle(client: AsyncClient) -> None:
     assert listing.status_code == 200
     assert any(i["id"] == "acme-prod" for i in listing.json())
 
-    fetched = await client.get(
-        "/api/channels/email/identities/acme-prod", headers=headers
-    )
+    fetched = await client.get("/api/channels/email/identities/acme-prod", headers=headers)
     assert fetched.status_code == 200
     assert fetched.json()["from_email"] == "notifications@acme.com"
 
-    deleted = await client.delete(
-        "/api/channels/email/identities/acme-prod", headers=headers
-    )
+    deleted = await client.delete("/api/channels/email/identities/acme-prod", headers=headers)
     assert deleted.status_code == 204
 
-    gone = await client.get(
-        "/api/channels/email/identities/acme-prod", headers=headers
-    )
+    gone = await client.get("/api/channels/email/identities/acme-prod", headers=headers)
     assert gone.status_code == 404
 
 
@@ -268,9 +262,7 @@ async def test_action_post_pre_feature_token_leaves_completed_by_null(
         break
 
     # `recipient=None` (default) → token's signed body omits `r`.
-    token = sign_action_token(
-        task_id=task_id, field_name="approve", value=True
-    )
+    token = sign_action_token(task_id=task_id, field_name="approve", value=True)
     resp = await client.post(f"/api/channels/email/action/{token}")
     assert resp.status_code == 200
 

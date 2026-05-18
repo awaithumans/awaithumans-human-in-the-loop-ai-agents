@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import atexit
+import contextlib
 import logging
 import os
 import secrets
@@ -62,10 +63,9 @@ def _ensure_dev_payload_key(db_path: str) -> None:
     else:
         key = secrets.token_urlsafe(32)
         key_path.write_text(key)
-        try:
+        # Windows or exotic filesystems — best-effort.
+        with contextlib.suppress(OSError):
             key_path.chmod(0o600)
-        except OSError:
-            pass  # Windows or exotic filesystems — best-effort
         logger.info("Generated dev PAYLOAD_KEY at %s (0600)", key_path)
 
     os.environ["AWAITHUMANS_PAYLOAD_KEY"] = key
@@ -101,10 +101,8 @@ def _ensure_dev_admin_token(db_path: str) -> str:
     else:
         token = secrets.token_urlsafe(32)
         token_path.write_text(token)
-        try:
+        with contextlib.suppress(OSError):
             token_path.chmod(0o600)
-        except OSError:
-            pass
         logger.info("Generated dev ADMIN_API_TOKEN at %s (0600)", token_path)
 
     os.environ["AWAITHUMANS_ADMIN_API_TOKEN"] = token

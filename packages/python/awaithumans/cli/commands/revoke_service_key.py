@@ -33,10 +33,6 @@ def revoke_service_key(
                 )
                 raise typer.Exit(code=1) from e
 
-        typer.echo(
-            typer.style(
-                f"✓ revoked {row.name} ({row.id})", fg=typer.colors.GREEN
-            )
-        )
+        typer.echo(typer.style(f"✓ revoked {row.name} ({row.id})", fg=typer.colors.GREEN))
 
     asyncio.run(_run())

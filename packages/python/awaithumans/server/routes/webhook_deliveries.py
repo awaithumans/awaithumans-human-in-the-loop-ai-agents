@@ -51,8 +51,7 @@ async def list_webhook_deliveries(
     status: WebhookDeliveryStatus | None = Query(
         default=None,
         description=(
-            "Filter to one lifecycle state. Default returns all "
-            "statuses ordered newest-first."
+            "Filter to one lifecycle state. Default returns all statuses ordered newest-first."
         ),
     ),
     limit: int = Query(default=50, ge=1, le=500),
@@ -66,9 +65,7 @@ async def list_webhook_deliveries(
     """
     require_operator_or_admin(request)
 
-    stmt = select(WebhookDelivery).order_by(WebhookDelivery.updated_at.desc()).limit(
-        limit
-    )
+    stmt = select(WebhookDelivery).order_by(WebhookDelivery.updated_at.desc()).limit(limit)
     if status is not None:
         stmt = stmt.where(WebhookDelivery.status == status)
 

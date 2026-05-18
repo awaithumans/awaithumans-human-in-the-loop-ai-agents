@@ -10,7 +10,7 @@ are resolved here via model_rebuild().
 
 from __future__ import annotations
 
-from typing import Annotated, Union
+from typing import Annotated
 
 from pydantic import BaseModel, Field
 
@@ -42,42 +42,33 @@ from awaithumans.forms.fields.text import DisplayText, LongText, RichText, Short
 FORM_DEFINITION_VERSION = 1
 
 FormField = Annotated[
-    Union[
-        # Text
-        DisplayText,
-        ShortText,
-        LongText,
-        RichText,
-        # Selection
-        Switch,
-        SingleSelect,
-        MultiSelect,
-        PictureChoice,
-        # Numeric
-        Slider,
-        StarRating,
-        OpinionScale,
-        Ranking,
-        # Date/time
-        DatePicker,
-        DateTimePicker,
-        DateRange,
-        TimePicker,
-        # Media
-        FileUpload,
-        Signature,
-        Image,
-        Video,
-        PdfViewer,
-        HtmlBlock,
-        # Layout
-        Section,
-        Divider,
-        SectionCollapse,
-        # Complex
-        Table,
-        Subform,
-    ],
+    DisplayText
+    | ShortText
+    | LongText
+    | RichText
+    | Switch
+    | SingleSelect
+    | MultiSelect
+    | PictureChoice
+    | Slider
+    | StarRating
+    | OpinionScale
+    | Ranking
+    | DatePicker
+    | DateTimePicker
+    | DateRange
+    | TimePicker
+    | FileUpload
+    | Signature
+    | Image
+    | Video
+    | PdfViewer
+    | HtmlBlock
+    | Section
+    | Divider
+    | SectionCollapse
+    | Table
+    | Subform,
     Field(discriminator="kind"),
 ]
 

@@ -28,7 +28,9 @@ from awaithumans.utils.constants import TERMINAL_STATUSES_SET
 # partial index never filters anything. Derive the names from
 # TERMINAL_STATUSES_SET so this can't drift.
 _TERMINAL_STATUS_VALUES = (
-    "(" + ", ".join(f"'{s.name}'" for s in sorted(TERMINAL_STATUSES_SET, key=lambda s: s.name)) + ")"
+    "("
+    + ", ".join(f"'{s.name}'" for s in sorted(TERMINAL_STATUSES_SET, key=lambda s: s.name))
+    + ")"
 )
 _ACTIVE_IDEMPOTENCY_WHERE = f"status NOT IN {_TERMINAL_STATUS_VALUES}"
 

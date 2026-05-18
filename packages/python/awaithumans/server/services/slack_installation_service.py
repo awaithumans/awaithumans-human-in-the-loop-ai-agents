@@ -63,9 +63,7 @@ async def upsert_installation(
     return existing
 
 
-async def get_installation(
-    session: AsyncSession, team_id: str
-) -> SlackInstallation | None:
+async def get_installation(session: AsyncSession, team_id: str) -> SlackInstallation | None:
     result = await session.execute(
         select(SlackInstallation).where(SlackInstallation.team_id == team_id)
     )
