@@ -9,7 +9,7 @@ import {
 	type Task,
 	type TaskStatus,
 } from "@/lib/server";
-import { completedByLabel, cn, formatRelativeTime } from "@/lib/utils";
+import { completedByLabel, formatRelativeTime } from "@/lib/utils";
 import {
 	TASK_ID_TRUNCATE_LENGTH,
 	TASK_LIST_DEFAULT_PAGE_SIZE,
@@ -49,15 +49,6 @@ interface FilterState {
 	pageSize: number;
 	offset: number;
 }
-
-const DEFAULT_FILTERS: FilterState = {
-	status: "all",
-	assignedTo: "",
-	unassigned: false,
-	mine: false,
-	pageSize: TASK_LIST_DEFAULT_PAGE_SIZE,
-	offset: 0,
-};
 
 function readFiltersFromSearchParams(params: URLSearchParams): FilterState {
 	const rawStatus = params.get("status") ?? "all";
