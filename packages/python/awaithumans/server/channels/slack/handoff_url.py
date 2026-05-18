@@ -38,12 +38,8 @@ def build_review_url(*, task_id: str, params: HandoffParams | None) -> str:
     if params is None:
         return _unsigned_url(task_id)
 
-    sig = sign_handoff(
-        user_id=params.user_id, task_id=task_id, exp_unix=params.exp_unix
-    )
-    qs = urllib.parse.urlencode(
-        {"u": params.user_id, "t": task_id, "e": params.exp_unix, "s": sig}
-    )
+    sig = sign_handoff(user_id=params.user_id, task_id=task_id, exp_unix=params.exp_unix)
+    qs = urllib.parse.urlencode({"u": params.user_id, "t": task_id, "e": params.exp_unix, "s": sig})
     return f"{settings.PUBLIC_URL.rstrip('/')}/api/auth/slack-handoff?{qs}"
 
 

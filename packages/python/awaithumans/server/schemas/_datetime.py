@@ -27,11 +27,7 @@ def utc_iso(dt: datetime | None) -> str | None:
     """
     if dt is None:
         return None
-    dt = (
-        dt.replace(tzinfo=timezone.utc)
-        if dt.tzinfo is None
-        else dt.astimezone(timezone.utc)
-    )
+    dt = dt.replace(tzinfo=timezone.utc) if dt.tzinfo is None else dt.astimezone(timezone.utc)
     # Python emits `+00:00`; the web convention is `Z`. Both are valid
     # ISO-8601, but `Z` is 5 bytes shorter and what `JSON.parse`-y
     # clients expect.

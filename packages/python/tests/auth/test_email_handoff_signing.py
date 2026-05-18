@@ -19,7 +19,6 @@ from awaithumans.server.core.email_handoff import (
     verify_handoff,
 )
 
-
 RECIPIENT = "alice@acme.com"
 TASK = "task_" + "b" * 27
 
@@ -34,9 +33,7 @@ def _far_future() -> int:
 def test_roundtrip_accepts_valid_signature() -> None:
     exp = _far_future()
     sig = sign_handoff(recipient=RECIPIENT, task_id=TASK, exp_unix=exp)
-    verify_handoff(
-        recipient=RECIPIENT, task_id=TASK, exp_unix=exp, signature=sig
-    )
+    verify_handoff(recipient=RECIPIENT, task_id=TASK, exp_unix=exp, signature=sig)
 
 
 def test_signature_is_deterministic() -> None:
@@ -55,25 +52,15 @@ def test_signature_is_case_insensitive_on_recipient() -> None:
     b = sign_handoff(recipient="alice@acme.com", task_id=TASK, exp_unix=exp)
     assert a == b
     # And verification accepts either form.
-    verify_handoff(
-        recipient="ALICE@ACME.COM", task_id=TASK, exp_unix=exp, signature=a
-    )
+    verify_handoff(recipient="ALICE@ACME.COM", task_id=TASK, exp_unix=exp, signature=a)
 
 
 def test_signature_changes_when_any_field_changes() -> None:
     exp = _far_future()
     base = sign_handoff(recipient=RECIPIENT, task_id=TASK, exp_unix=exp)
-    assert (
-        sign_handoff(recipient="other@acme.com", task_id=TASK, exp_unix=exp)
-        != base
-    )
-    assert (
-        sign_handoff(recipient=RECIPIENT, task_id="other", exp_unix=exp) != base
-    )
-    assert (
-        sign_handoff(recipient=RECIPIENT, task_id=TASK, exp_unix=exp + 1)
-        != base
-    )
+    assert sign_handoff(recipient="other@acme.com", task_id=TASK, exp_unix=exp) != base
+    assert sign_handoff(recipient=RECIPIENT, task_id="other", exp_unix=exp) != base
+    assert sign_handoff(recipient=RECIPIENT, task_id=TASK, exp_unix=exp + 1) != base
 
 
 # ─── Tamper / replay ─────────────────────────────────────────────────

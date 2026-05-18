@@ -16,7 +16,6 @@ import pytest
 
 from awaithumans.server.app import _validate_cors_origins, _validate_public_url
 
-
 # ─── Acceptable configs ──────────────────────────────────────────────
 
 
@@ -43,9 +42,7 @@ def test_loopback_dev_accepted() -> None:
 
 
 def test_multiple_https_origins_accepted() -> None:
-    _validate_cors_origins(
-        ["https://app.acme.com", "https://admin.acme.com:443"]
-    )
+    _validate_cors_origins(["https://app.acme.com", "https://admin.acme.com:443"])
 
 
 # ─── Refused configs ─────────────────────────────────────────────────
@@ -111,9 +108,7 @@ class TestPublicUrlValidation:
         PUBLIC_URL + path, so this would yield `…/api/channels/slack/
         oauth/callback/task?id=…` for the dashboard link."""
         with pytest.raises(RuntimeError, match="not a base URL"):
-            _validate_public_url(
-                "https://example.com/api/channels/slack/oauth/callback"
-            )
+            _validate_public_url("https://example.com/api/channels/slack/oauth/callback")
 
     def test_path_segment_refused(self) -> None:
         with pytest.raises(RuntimeError, match="not a base URL"):

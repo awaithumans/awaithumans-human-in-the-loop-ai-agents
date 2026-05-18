@@ -44,8 +44,8 @@ class SlackMemberResponse(BaseModel):
     We deliberately don't forward the full Slack profile; dashboard
     only needs enough to label the row and record the stable ID."""
 
-    id: str            # Slack user ID (U… / W…)
-    name: str          # @handle ("alice")
+    id: str  # Slack user ID (U… / W…)
+    name: str  # @handle ("alice")
     real_name: str | None
     display_name: str | None
     is_admin: bool

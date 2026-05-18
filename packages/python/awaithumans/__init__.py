@@ -19,6 +19,7 @@ Usage (sync):
 
     result = await_human_sync(task=..., ...)
 """
+
 from __future__ import annotations
 
 __version__ = "0.1.4"

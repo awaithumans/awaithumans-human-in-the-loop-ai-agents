@@ -42,9 +42,7 @@ def test_each_signed_token_gets_a_fresh_jti() -> None:
 
 def test_explicit_jti_overrides_random() -> None:
     """The `jti=` kwarg lets tests pin a known value for assertions."""
-    token = sign_action_token(
-        task_id="t1", field_name="approve", value=True, jti="fixed-jti-x"
-    )
+    token = sign_action_token(task_id="t1", field_name="approve", value=True, jti="fixed-jti-x")
     claim = verify_action_token(token)
     assert claim.jti == "fixed-jti-x"
 
@@ -74,9 +72,7 @@ def test_tampered_body_rejected() -> None:
     body_mod = body.replace(',"v":true', ',"v":false')
     assert body_mod != body  # sanity check — replacement happened
     tampered_blob = blob[:32] + body_mod.encode()
-    tampered_token = (
-        base64.urlsafe_b64encode(bytes(tampered_blob)).decode().rstrip("=")
-    )
+    tampered_token = base64.urlsafe_b64encode(bytes(tampered_blob)).decode().rstrip("=")
     with pytest.raises(InvalidActionTokenError, match="signature"):
         verify_action_token(tampered_token)
 
@@ -85,28 +81,30 @@ def test_expired_rejected() -> None:
     token = sign_action_token(task_id="t1", field_name="approve", value=True)
     # Fast-forward past TTL.
     future = time.time() + MAGIC_LINK_MAX_AGE_SECONDS + 10
-    with patch(
-        "awaithumans.server.channels.email.magic_links.time.time",
-        return_value=future,
+    with (
+        patch(
+            "awaithumans.server.channels.email.magic_links.time.time",
+            return_value=future,
+        ),
+        pytest.raises(InvalidActionTokenError, match="expired"),
     ):
-        with pytest.raises(InvalidActionTokenError, match="expired"):
-            verify_action_token(token)
+        verify_action_token(token)
 
 
 def test_short_ttl_honored() -> None:
-    token = sign_action_token(
-        task_id="t1", field_name="approve", value=True, ttl_seconds=1
-    )
+    token = sign_action_token(task_id="t1", field_name="approve", value=True, ttl_seconds=1)
     # Still valid immediately
     verify_action_token(token)
     # Expired after 2 seconds (via patched clock)
     future = time.time() + 5
-    with patch(
-        "awaithumans.server.channels.email.magic_links.time.time",
-        return_value=future,
+    with (
+        patch(
+            "awaithumans.server.channels.email.magic_links.time.time",
+            return_value=future,
+        ),
+        pytest.raises(InvalidActionTokenError, match="expired"),
     ):
-        with pytest.raises(InvalidActionTokenError, match="expired"):
-            verify_action_token(token)
+        verify_action_token(token)
 
 
 def test_recipient_round_trips_through_token() -> None:
@@ -128,9 +126,7 @@ def test_recipient_omitted_yields_none() -> None:
     """Pre-feature tokens (no `r` field in the signed body) verify
     cleanly — the audit log just shows "—" the way it did before
     this change. Tested by signing without `recipient=`."""
-    token = sign_action_token(
-        task_id="t1", field_name="approve", value=True
-    )
+    token = sign_action_token(task_id="t1", field_name="approve", value=True)
     claim = verify_action_token(token)
     assert claim.recipient is None
 

@@ -157,9 +157,7 @@ def test_smtp_transport_fully_configured_emits_no_warning(
 def test_resend_transport_warns_when_key_missing(
     captured: list[logging.LogRecord],
 ) -> None:
-    validate_channel_config(
-        _settings(EMAIL_TRANSPORT="resend", EMAIL_FROM="a@b.com")
-    )
+    validate_channel_config(_settings(EMAIL_TRANSPORT="resend", EMAIL_FROM="a@b.com"))
     assert "AWAITHUMANS_RESEND_KEY" in _text(captured)
 
 
@@ -197,9 +195,7 @@ def test_slack_bot_token_without_signing_secret_warns(
 def test_slack_bot_token_with_signing_secret_no_warning(
     captured: list[logging.LogRecord],
 ) -> None:
-    validate_channel_config(
-        _settings(SLACK_BOT_TOKEN="xoxb-test", SLACK_SIGNING_SECRET="signsec")
-    )
+    validate_channel_config(_settings(SLACK_BOT_TOKEN="xoxb-test", SLACK_SIGNING_SECRET="signsec"))
     assert _text(captured) == ""
 
 

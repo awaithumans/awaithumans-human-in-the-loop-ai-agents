@@ -31,9 +31,7 @@ def test_service_key_round_trip() -> None:
         session.commit()
 
     with Session(engine) as session:
-        loaded = session.exec(
-            select(ServiceAPIKey).where(ServiceAPIKey.id == "01HXSAMPLE")
-        ).one()
+        loaded = session.exec(select(ServiceAPIKey).where(ServiceAPIKey.id == "01HXSAMPLE")).one()
         assert loaded.name == "acme-prod"
         assert loaded.key_hash == "a" * 64
         assert loaded.key_prefix == "ah_sk_abcdef"

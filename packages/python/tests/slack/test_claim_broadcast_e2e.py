@@ -70,7 +70,9 @@ class FakeSlackClient:
         )
         return {"ok": True}
 
-    async def chat_postEphemeral(
+    # Slack SDK uses camelCase here; matching that exactly so this fake
+    # is drop-in for `slack_sdk.web.async_client.AsyncWebClient`.
+    async def chat_postEphemeral(  # noqa: N802
         self, *, channel: str, user: str, text: str
     ) -> dict[str, Any]:
         self.calls.append(
@@ -87,9 +89,7 @@ class FakeSlackClient:
         url: str | None = None,
     ) -> dict[str, Any]:
         # response_url-based ephemeral posts come through here.
-        self.calls.append(
-            {"method": "api_call", "http_verb": http_verb, "json": json, "url": url}
-        )
+        self.calls.append({"method": "api_call", "http_verb": http_verb, "json": json, "url": url})
         return {"ok": True}
 
 
@@ -144,9 +144,7 @@ async def slack_ctx() -> AsyncGenerator[tuple[AsyncClient, FakeSlackClient], Non
 def _sign(body: bytes) -> dict[str, str]:
     ts = str(int(time.time()))
     base = f"v0:{ts}:".encode() + body
-    sig = "v0=" + hmac.new(
-        SIGNING_SECRET.encode(), base, hashlib.sha256
-    ).hexdigest()
+    sig = "v0=" + hmac.new(SIGNING_SECRET.encode(), base, hashlib.sha256).hexdigest()
     return {
         "Content-Type": "application/x-www-form-urlencoded",
         "X-Slack-Request-Timestamp": ts,
@@ -250,9 +248,7 @@ async def test_claim_assigns_task_and_opens_modal(
             slack_user_id="U_ALICE",
         )
     )
-    resp = await client.post(
-        "/api/channels/slack/interactions", content=body, headers=_sign(body)
-    )
+    resp = await client.post("/api/channels/slack/interactions", content=body, headers=_sign(body))
     assert resp.status_code == 200
 
     # Expected calls: chat_update (hide claim button) + views_open (modal).
@@ -309,12 +305,8 @@ async def test_second_claim_is_ephemeral_error(
         break
 
     # First click — succeeds.
-    body1 = _form_body(
-        _claim_payload(task_id=task_id, team_id="T_ACME", slack_user_id="U_ALICE")
-    )
-    r1 = await client.post(
-        "/api/channels/slack/interactions", content=body1, headers=_sign(body1)
-    )
+    body1 = _form_body(_claim_payload(task_id=task_id, team_id="T_ACME", slack_user_id="U_ALICE"))
+    r1 = await client.post("/api/channels/slack/interactions", content=body1, headers=_sign(body1))
     assert r1.status_code == 200
 
     calls_after_first = len(fake.calls)
@@ -329,9 +321,7 @@ async def test_second_claim_is_ephemeral_error(
             trigger_id="trigger-2",
         )
     )
-    r2 = await client.post(
-        "/api/channels/slack/interactions", content=body2, headers=_sign(body2)
-    )
+    r2 = await client.post("/api/channels/slack/interactions", content=body2, headers=_sign(body2))
     assert r2.status_code == 200
 
     # Second click should NOT have opened another modal or updated the message.
@@ -342,13 +332,10 @@ async def test_second_claim_is_ephemeral_error(
 
     # Exactly one ephemeral-style reply — either response_url api_call
     # or chat.postEphemeral fallback.
-    ephemeral_calls = [
-        c for c in new_calls if c["method"] in ("api_call", "chat_postEphemeral")
-    ]
+    ephemeral_calls = [c for c in new_calls if c["method"] in ("api_call", "chat_postEphemeral")]
     assert len(ephemeral_calls) == 1
-    reply_text = (
-        ephemeral_calls[0].get("json", {}).get("text")
-        or ephemeral_calls[0].get("text", "")
+    reply_text = ephemeral_calls[0].get("json", {}).get("text") or ephemeral_calls[0].get(
+        "text", ""
     )
     assert "already claimed" in reply_text.lower()
 
@@ -384,9 +371,7 @@ async def test_claim_by_user_not_in_directory_ephemeral_error(
             slack_user_id="U_STRANGER",
         )
     )
-    r = await client.post(
-        "/api/channels/slack/interactions", content=body, headers=_sign(body)
-    )
+    r = await client.post("/api/channels/slack/interactions", content=body, headers=_sign(body))
     assert r.status_code == 200
 
     methods = [c["method"] for c in fake.calls]
@@ -409,9 +394,7 @@ async def test_claim_on_terminal_task_ephemeral_error(
     """Stale broadcast message posted before the task was completed on
     another channel. Claim should soft-fail with an ephemeral."""
     client, fake = slack_ctx
-    task_id, _ = await _seed_task_and_user(
-        client, slack_team_id="T_ACME", slack_user_id="U_ALICE"
-    )
+    task_id, _ = await _seed_task_and_user(client, slack_team_id="T_ACME", slack_user_id="U_ALICE")
 
     # Flip the task to COMPLETED directly (simulating completion via
     # a different channel).
@@ -425,23 +408,14 @@ async def test_claim_on_terminal_task_ephemeral_error(
         )
         break
 
-    body = _form_body(
-        _claim_payload(task_id=task_id, team_id="T_ACME", slack_user_id="U_ALICE")
-    )
-    r = await client.post(
-        "/api/channels/slack/interactions", content=body, headers=_sign(body)
-    )
+    body = _form_body(_claim_payload(task_id=task_id, team_id="T_ACME", slack_user_id="U_ALICE"))
+    r = await client.post("/api/channels/slack/interactions", content=body, headers=_sign(body))
     assert r.status_code == 200
 
     methods = [c["method"] for c in fake.calls]
     assert "views_open" not in methods
 
-    ephemeral_calls = [
-        c for c in fake.calls if c["method"] in ("api_call", "chat_postEphemeral")
-    ]
+    ephemeral_calls = [c for c in fake.calls if c["method"] in ("api_call", "chat_postEphemeral")]
     assert len(ephemeral_calls) == 1
-    text = (
-        ephemeral_calls[0].get("json", {}).get("text")
-        or ephemeral_calls[0].get("text", "")
-    )
+    text = ephemeral_calls[0].get("json", {}).get("text") or ephemeral_calls[0].get("text", "")
     assert "completed" in text.lower() or "cancelled" in text.lower()

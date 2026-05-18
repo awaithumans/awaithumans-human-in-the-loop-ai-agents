@@ -68,9 +68,7 @@ def test_temporal_resolve_completed_returns_validated_response() -> None:
     assert result.notes == "approved on a previous run"
 
 
-def test_temporal_resolve_completed_with_invalid_response_raises_schema_error() -> (
-    None
-):
+def test_temporal_resolve_completed_with_invalid_response_raises_schema_error() -> None:
     """If the cached response doesn't match the schema, surface a
     SchemaValidationError instead of returning a malformed object —
     same shape as the post-signal path."""

@@ -45,9 +45,7 @@ def test_valid_signature_for_existing_user_signs_in(
 ) -> None:
     task_id = "task_existing_user"
     exp = _far_future()
-    sig = sign_handoff(
-        recipient=operator_user.email, task_id=task_id, exp_unix=exp
-    )
+    sig = sign_handoff(recipient=operator_user.email, task_id=task_id, exp_unix=exp)
 
     resp = client.get(
         "/api/auth/email-handoff",
@@ -84,15 +82,10 @@ def test_unknown_email_is_auto_provisioned_as_reviewer(
     async def _exists(email: str) -> bool:
         factory = get_async_session_factory()
         async with factory() as session:
-            result = await session.execute(
-                select(User).where(User.email == email)
-            )
+            result = await session.execute(select(User).where(User.email == email))
             return result.scalar_one_or_none() is not None
 
-    assert (
-        asyncio.new_event_loop().run_until_complete(_exists(new_email))
-        is False
-    )
+    assert asyncio.new_event_loop().run_until_complete(_exists(new_email)) is False
 
     resp = client.get(
         "/api/auth/email-handoff",
@@ -107,9 +100,7 @@ def test_unknown_email_is_auto_provisioned_as_reviewer(
     async def _fetch(email: str) -> User | None:
         factory = get_async_session_factory()
         async with factory() as session:
-            result = await session.execute(
-                select(User).where(User.email == email)
-            )
+            result = await session.execute(select(User).where(User.email == email))
             return result.scalar_one_or_none()
 
     user = asyncio.new_event_loop().run_until_complete(_fetch(new_email))
@@ -305,9 +296,7 @@ def test_handoff_claims_unassigned_task_for_recipient(
     assert user_id is not None  # the just-provisioned user
 
 
-def test_handoff_does_not_steal_existing_assignee(
-    client: TestClient, operator_user: User
-) -> None:
+def test_handoff_does_not_steal_existing_assignee(client: TestClient, operator_user: User) -> None:
     """If the task already has an assignee, the handoff signs the
     user in (so they can read the task if they're an operator) but
     DOESN'T overwrite the assignee. First-writer-wins protects
@@ -334,9 +323,7 @@ def test_handoff_does_not_steal_existing_assignee(
             )
             return task.id
 
-    task_id = asyncio.new_event_loop().run_until_complete(
-        _make_assigned_task()
-    )
+    task_id = asyncio.new_event_loop().run_until_complete(_make_assigned_task())
 
     # Sign for a different recipient than the assignee.
     other_email = "later-clicker@example.com"

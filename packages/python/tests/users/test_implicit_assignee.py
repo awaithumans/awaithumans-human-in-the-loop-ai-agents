@@ -98,12 +98,12 @@ def _patch_slack(*, resolved_user_id: str | None):
 async def test_handle_with_directory_match_becomes_assignee(
     session: AsyncSession,
 ) -> None:
-    alice = await _seed_user(
-        session, email="alice@acme.com", slack_user_id="U_ALICE"
-    )
-    with _patch_slack(resolved_user_id="U_ALICE")[0], _patch_slack(
-        resolved_user_id="U_ALICE"
-    )[1], _patch_slack(resolved_user_id="U_ALICE")[2]:
+    alice = await _seed_user(session, email="alice@acme.com", slack_user_id="U_ALICE")
+    with (
+        _patch_slack(resolved_user_id="U_ALICE")[0],
+        _patch_slack(resolved_user_id="U_ALICE")[1],
+        _patch_slack(resolved_user_id="U_ALICE")[2],
+    ):
         result = await derive_implicit_assignee(session, ["slack:@alice"])
 
     assert result.user_id == alice.id
@@ -114,15 +114,13 @@ async def test_handle_with_directory_match_becomes_assignee(
 async def test_email_target_resolves_to_directory_user(
     session: AsyncSession,
 ) -> None:
-    bob = await _seed_user(
-        session, email="bob@acme.com", slack_user_id="U_BOB"
-    )
-    with _patch_slack(resolved_user_id="U_BOB")[0], _patch_slack(
-        resolved_user_id="U_BOB"
-    )[1], _patch_slack(resolved_user_id="U_BOB")[2]:
-        result = await derive_implicit_assignee(
-            session, ["slack:bob@acme.com"]
-        )
+    bob = await _seed_user(session, email="bob@acme.com", slack_user_id="U_BOB")
+    with (
+        _patch_slack(resolved_user_id="U_BOB")[0],
+        _patch_slack(resolved_user_id="U_BOB")[1],
+        _patch_slack(resolved_user_id="U_BOB")[2],
+    ):
+        result = await derive_implicit_assignee(session, ["slack:bob@acme.com"])
 
     assert result.user_id == bob.id
 
@@ -135,9 +133,11 @@ async def test_user_id_target_resolves_directly(
     returns the user_id as-is. The directory lookup still has to find
     the row."""
     alice = await _seed_user(session, slack_user_id="U_ALICE")
-    with _patch_slack(resolved_user_id="U_ALICE")[0], _patch_slack(
-        resolved_user_id="U_ALICE"
-    )[1], _patch_slack(resolved_user_id="U_ALICE")[2]:
+    with (
+        _patch_slack(resolved_user_id="U_ALICE")[0],
+        _patch_slack(resolved_user_id="U_ALICE")[1],
+        _patch_slack(resolved_user_id="U_ALICE")[2],
+    ):
         result = await derive_implicit_assignee(session, ["slack:@U_ALICE"])
 
     assert result.user_id == alice.id
@@ -163,9 +163,7 @@ async def test_multiple_notify_entries_does_not_derive(
     wrong; stay unassigned and let the operator route manually if
     they care."""
     await _seed_user(session, email="alice@acme.com", slack_user_id="U_ALICE")
-    result = await derive_implicit_assignee(
-        session, ["slack:@alice", "email:bob@acme.com"]
-    )
+    result = await derive_implicit_assignee(session, ["slack:@alice", "email:bob@acme.com"])
     assert result.user_id is None
 
 
@@ -177,9 +175,11 @@ async def test_target_not_in_directory_returns_empty(
     that slack_user_id. The notifier still posts the DM (it does
     its own resolution); but we can't pin an `assigned_to_user_id`
     so the task stays unassigned. Operator can add the user later."""
-    with _patch_slack(resolved_user_id="U_GHOST")[0], _patch_slack(
-        resolved_user_id="U_GHOST"
-    )[1], _patch_slack(resolved_user_id="U_GHOST")[2]:
+    with (
+        _patch_slack(resolved_user_id="U_GHOST")[0],
+        _patch_slack(resolved_user_id="U_GHOST")[1],
+        _patch_slack(resolved_user_id="U_GHOST")[2],
+    ):
         result = await derive_implicit_assignee(session, ["slack:@ghost"])
     assert result.user_id is None
 
@@ -190,12 +190,12 @@ async def test_inactive_directory_user_skipped(
 ) -> None:
     """An inactive user in the directory must not be assigned a new
     task — that's the whole point of toggling `active=False`."""
-    await _seed_user(
-        session, email="alice@acme.com", slack_user_id="U_ALICE", active=False
-    )
-    with _patch_slack(resolved_user_id="U_ALICE")[0], _patch_slack(
-        resolved_user_id="U_ALICE"
-    )[1], _patch_slack(resolved_user_id="U_ALICE")[2]:
+    await _seed_user(session, email="alice@acme.com", slack_user_id="U_ALICE", active=False)
+    with (
+        _patch_slack(resolved_user_id="U_ALICE")[0],
+        _patch_slack(resolved_user_id="U_ALICE")[1],
+        _patch_slack(resolved_user_id="U_ALICE")[2],
+    ):
         result = await derive_implicit_assignee(session, ["slack:@alice"])
     assert result.user_id is None
 
@@ -210,9 +210,7 @@ async def test_email_channel_derives_when_recipient_is_directory_user(
     have to claim — for recipients who already have directory rows
     the create-time path is cleaner."""
     user = await _seed_user(session, email="alice@acme.com")
-    result = await derive_implicit_assignee(
-        session, ["email:alice@acme.com"]
-    )
+    result = await derive_implicit_assignee(session, ["email:alice@acme.com"])
     assert result.user_id == user.id
     assert result.email == user.email
 
@@ -225,9 +223,7 @@ async def test_email_channel_with_unknown_recipient_stays_unassigned(
     a user_id but still threads the address through so the email
     channel knows where to send. The handoff endpoint claims at
     click time when the user is auto-provisioned."""
-    result = await derive_implicit_assignee(
-        session, ["email:nobody@acme.com"]
-    )
+    result = await derive_implicit_assignee(session, ["email:nobody@acme.com"])
     assert result.user_id is None
     assert result.email == "nobody@acme.com"
 
@@ -240,9 +236,7 @@ async def test_email_channel_handles_identity_suffix(
     the same way — derivation looks up the recipient regardless of
     which identity routes the email."""
     user = await _seed_user(session, email="alice@acme.com")
-    result = await derive_implicit_assignee(
-        session, ["email+acme-prod:alice@acme.com"]
-    )
+    result = await derive_implicit_assignee(session, ["email+acme-prod:alice@acme.com"])
     assert result.user_id == user.id
 
 

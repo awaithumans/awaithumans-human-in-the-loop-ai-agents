@@ -211,9 +211,7 @@ async def action_confirm(
         # the central 500 handler and surface in operator logs.
         return HTMLResponse(
             status_code=404,
-            content=completed_page_html(
-                message="The task linked to this email no longer exists."
-            ),
+            content=completed_page_html(message="The task linked to this email no longer exists."),
         )
 
     if task.status in TERMINAL_STATUSES_SET:
@@ -244,9 +242,7 @@ async def action_submit(
         logger.info("Magic-link POST rejected: %s", exc)
         return HTMLResponse(
             status_code=400,
-            content=completed_page_html(
-                message="This link is invalid or has expired."
-            ),
+            content=completed_page_html(message="This link is invalid or has expired."),
         )
 
     # Single-use enforcement. Without this, a forwarded email or
@@ -285,14 +281,8 @@ async def action_submit(
             completed_via_channel="email",
         )
     except TaskAlreadyTerminalError:
-        return HTMLResponse(
-            content=completed_page_html(
-                message="This task was already completed."
-            )
-        )
+        return HTMLResponse(content=completed_page_html(message="This task was already completed."))
 
     return HTMLResponse(
-        content=completed_page_html(
-            message="Response recorded. Thanks for reviewing."
-        )
+        content=completed_page_html(message="Response recorded. Thanks for reviewing.")
     )

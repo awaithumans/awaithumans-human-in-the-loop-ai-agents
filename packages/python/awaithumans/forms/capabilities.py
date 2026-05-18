@@ -33,40 +33,40 @@ L = ChannelSupport.LINK_OUT
 
 CAPABILITIES: dict[str, dict[Channel, ChannelSupport]] = {
     # Text
-    "display_text":     {"dashboard": N, "slack": N, "email_interactive": N, "email_plain": N},
-    "short_text":       {"dashboard": N, "slack": N, "email_interactive": L, "email_plain": L},
-    "long_text":        {"dashboard": N, "slack": N, "email_interactive": L, "email_plain": L},
-    "rich_text":        {"dashboard": N, "slack": L, "email_interactive": L, "email_plain": L},
+    "display_text": {"dashboard": N, "slack": N, "email_interactive": N, "email_plain": N},
+    "short_text": {"dashboard": N, "slack": N, "email_interactive": L, "email_plain": L},
+    "long_text": {"dashboard": N, "slack": N, "email_interactive": L, "email_plain": L},
+    "rich_text": {"dashboard": N, "slack": L, "email_interactive": L, "email_plain": L},
     # Selection
-    "switch":           {"dashboard": N, "slack": N, "email_interactive": N, "email_plain": L},
-    "single_select":    {"dashboard": N, "slack": N, "email_interactive": N, "email_plain": L},
-    "multi_select":     {"dashboard": N, "slack": N, "email_interactive": N, "email_plain": L},
-    "picture_choice":   {"dashboard": N, "slack": N, "email_interactive": N, "email_plain": L},
+    "switch": {"dashboard": N, "slack": N, "email_interactive": N, "email_plain": L},
+    "single_select": {"dashboard": N, "slack": N, "email_interactive": N, "email_plain": L},
+    "multi_select": {"dashboard": N, "slack": N, "email_interactive": N, "email_plain": L},
+    "picture_choice": {"dashboard": N, "slack": N, "email_interactive": N, "email_plain": L},
     # Numeric
-    "slider":           {"dashboard": N, "slack": N, "email_interactive": L, "email_plain": L},
-    "star_rating":      {"dashboard": N, "slack": N, "email_interactive": N, "email_plain": L},
-    "opinion_scale":    {"dashboard": N, "slack": N, "email_interactive": N, "email_plain": L},
-    "ranking":          {"dashboard": N, "slack": L, "email_interactive": L, "email_plain": L},
+    "slider": {"dashboard": N, "slack": N, "email_interactive": L, "email_plain": L},
+    "star_rating": {"dashboard": N, "slack": N, "email_interactive": N, "email_plain": L},
+    "opinion_scale": {"dashboard": N, "slack": N, "email_interactive": N, "email_plain": L},
+    "ranking": {"dashboard": N, "slack": L, "email_interactive": L, "email_plain": L},
     # Date/time
-    "date":             {"dashboard": N, "slack": N, "email_interactive": L, "email_plain": L},
-    "datetime":         {"dashboard": N, "slack": N, "email_interactive": L, "email_plain": L},
-    "date_range":       {"dashboard": N, "slack": L, "email_interactive": L, "email_plain": L},
-    "time":             {"dashboard": N, "slack": N, "email_interactive": L, "email_plain": L},
+    "date": {"dashboard": N, "slack": N, "email_interactive": L, "email_plain": L},
+    "datetime": {"dashboard": N, "slack": N, "email_interactive": L, "email_plain": L},
+    "date_range": {"dashboard": N, "slack": L, "email_interactive": L, "email_plain": L},
+    "time": {"dashboard": N, "slack": N, "email_interactive": L, "email_plain": L},
     # Media input
-    "file_upload":      {"dashboard": N, "slack": N, "email_interactive": L, "email_plain": L},
-    "signature":        {"dashboard": N, "slack": L, "email_interactive": L, "email_plain": L},
+    "file_upload": {"dashboard": N, "slack": N, "email_interactive": L, "email_plain": L},
+    "signature": {"dashboard": N, "slack": L, "email_interactive": L, "email_plain": L},
     # Media display
-    "image":            {"dashboard": N, "slack": N, "email_interactive": N, "email_plain": L},
-    "video":            {"dashboard": N, "slack": L, "email_interactive": L, "email_plain": L},
-    "pdf_viewer":       {"dashboard": N, "slack": L, "email_interactive": L, "email_plain": L},
-    "html":             {"dashboard": N, "slack": L, "email_interactive": N, "email_plain": L},
+    "image": {"dashboard": N, "slack": N, "email_interactive": N, "email_plain": L},
+    "video": {"dashboard": N, "slack": L, "email_interactive": L, "email_plain": L},
+    "pdf_viewer": {"dashboard": N, "slack": L, "email_interactive": L, "email_plain": L},
+    "html": {"dashboard": N, "slack": L, "email_interactive": N, "email_plain": L},
     # Layout
-    "section":          {"dashboard": N, "slack": N, "email_interactive": N, "email_plain": N},
-    "divider":          {"dashboard": N, "slack": N, "email_interactive": N, "email_plain": N},
+    "section": {"dashboard": N, "slack": N, "email_interactive": N, "email_plain": N},
+    "divider": {"dashboard": N, "slack": N, "email_interactive": N, "email_plain": N},
     "section_collapse": {"dashboard": N, "slack": L, "email_interactive": N, "email_plain": N},
     # Complex
-    "table":            {"dashboard": N, "slack": L, "email_interactive": L, "email_plain": L},
-    "subform":          {"dashboard": N, "slack": L, "email_interactive": L, "email_plain": L},
+    "table": {"dashboard": N, "slack": L, "email_interactive": L, "email_plain": L},
+    "subform": {"dashboard": N, "slack": L, "email_interactive": L, "email_plain": L},
 }
 
 
@@ -98,13 +98,9 @@ def unsupported_fields(form: FormDefinition, channel: Channel) -> list[str]:
             if kind is None or kind not in CAPABILITIES:
                 continue
             if CAPABILITIES[kind][channel] == ChannelSupport.LINK_OUT:
-                identifier = (
-                    getattr(f, "name", None)
-                    or getattr(f, "label", None)
-                    or kind
-                )
+                identifier = getattr(f, "name", None) or getattr(f, "label", None) or kind
                 offenders.append(identifier)
-            if isinstance(f, (SectionCollapse, Subform)):
+            if isinstance(f, SectionCollapse | Subform):
                 walk(list(f.fields))
 
     walk(list(form.fields))

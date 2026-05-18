@@ -90,9 +90,7 @@ def sign_handoff(*, user_id: str, task_id: str, exp_unix: int) -> str:
     return base64.urlsafe_b64encode(mac).decode().rstrip("=")
 
 
-def verify_handoff(
-    *, user_id: str, task_id: str, exp_unix: int, signature: str
-) -> None:
+def verify_handoff(*, user_id: str, task_id: str, exp_unix: int, signature: str) -> None:
     """Validate the URL's signature + expiry. Raises `InvalidHandoffError`
     on any failure; returns None on success."""
     if not signature:

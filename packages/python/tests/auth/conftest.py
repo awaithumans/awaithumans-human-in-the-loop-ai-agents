@@ -19,7 +19,6 @@ from awaithumans.server.core import encryption
 from awaithumans.server.core.config import settings
 from awaithumans.server.db.models import User
 
-
 # Default operator credentials used across the auth test suite.
 OPERATOR_EMAIL = "operator@example.com"
 OPERATOR_PASSWORD = "correct-horse-battery-staple"

@@ -52,9 +52,7 @@ class FileTransport:
 
     def __init__(self, *, dir: str) -> None:
         if not dir:
-            raise EmailTransportError(
-                "file transport: config.dir is required."
-            )
+            raise EmailTransportError("file transport: config.dir is required.")
         self._dir = Path(dir).expanduser().resolve()
 
     @property
@@ -74,17 +72,13 @@ class FileTransport:
         filename = self._dir / f"{unix_ms}-{message_id}.json"
 
         payload = asdict(message)
-        payload["_received_at"] = time.strftime(
-            "%Y-%m-%dT%H:%M:%SZ", time.gmtime()
-        )
+        payload["_received_at"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
         payload["_message_id"] = message_id
 
         try:
             filename.write_text(json.dumps(payload, indent=2))
         except OSError as exc:
-            raise EmailTransportError(
-                f"file transport: failed to write {filename}: {exc}"
-            ) from exc
+            raise EmailTransportError(f"file transport: failed to write {filename}: {exc}") from exc
 
         logger.info(
             "[email/file] wrote %s (to=%s subject=%s)",

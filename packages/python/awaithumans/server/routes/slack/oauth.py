@@ -77,9 +77,7 @@ def _oauth_cookie_secure() -> bool:
 def _error_redirect(code: str) -> RedirectResponse:
     """Redirect to dashboard home with a URL-encoded error param."""
     qs = urlencode({"slack_oauth_error": code[:SLACK_OAUTH_ERROR_PARAM_MAX_LENGTH]})
-    return RedirectResponse(
-        url=f"{settings.PUBLIC_URL.rstrip('/')}/?{qs}"
-    )
+    return RedirectResponse(url=f"{settings.PUBLIC_URL.rstrip('/')}/?{qs}")
 
 
 @router.get("/oauth/start")
@@ -127,9 +125,7 @@ async def oauth_start(install_token: str | None = None) -> RedirectResponse:
         "state": state,
         "redirect_uri": _oauth_redirect_uri(),
     }
-    response = RedirectResponse(
-        url=f"https://slack.com/oauth/v2/authorize?{urlencode(params)}"
-    )
+    response = RedirectResponse(url=f"https://slack.com/oauth/v2/authorize?{urlencode(params)}")
     # Double-submit cookie: callback will require this to match the `state`
     # query param Slack sends back.
     response.set_cookie(
@@ -166,15 +162,11 @@ async def oauth_callback(
         raise HTTPException(status_code=401, detail="OAuth state mismatch.")
 
     # 2) State must carry a valid HMAC and not be expired.
-    if not settings.SLACK_SIGNING_SECRET or not verify_state(
-        state, settings.SLACK_SIGNING_SECRET
-    ):
+    if not settings.SLACK_SIGNING_SECRET or not verify_state(state, settings.SLACK_SIGNING_SECRET):
         raise HTTPException(status_code=401, detail="Invalid OAuth state.")
 
     if not settings.SLACK_CLIENT_ID or not settings.SLACK_CLIENT_SECRET:
-        raise HTTPException(
-            status_code=503, detail="Slack OAuth credentials not configured."
-        )
+        raise HTTPException(status_code=503, detail="Slack OAuth credentials not configured.")
 
     async with httpx.AsyncClient(timeout=SLACK_OAUTH_HTTP_TIMEOUT_SECONDS) as http:
         resp = await http.post(
@@ -220,9 +212,7 @@ async def oauth_callback(
     logger.info("Slack installed for team %s (%s)", team_id, team.get("name"))
 
     qs = urlencode({"slack_installed": team.get("name") or team_id})
-    response = RedirectResponse(
-        url=f"{settings.PUBLIC_URL.rstrip('/')}/?{qs}"
-    )
+    response = RedirectResponse(url=f"{settings.PUBLIC_URL.rstrip('/')}/?{qs}")
     # Single-use cookie — invalidate immediately so replays fail.
     response.delete_cookie(SLACK_OAUTH_STATE_COOKIE_NAME, path="/api/channels/slack/oauth")
     return response

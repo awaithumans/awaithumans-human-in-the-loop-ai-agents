@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Literal, Union
+from typing import Literal
 
 from pydantic import BaseModel
 
@@ -24,14 +24,14 @@ class MarketplaceAssignment(BaseModel):
     marketplace: Literal[True] = True
 
 
-AssignTo = Union[
-    str,                    # email — direct assignment
-    list[str],              # multiple emails — first to claim
-    PoolAssignment,         # named pool
-    RoleAssignment,         # role-based (optionally with access level)
-    UserAssignment,         # internal user ID
-    MarketplaceAssignment,  # reserved for Phase 3
-]
+AssignTo = (
+    str  # email — direct assignment
+    | list[str]  # multiple emails — first to claim
+    | PoolAssignment  # named pool
+    | RoleAssignment  # role-based (optionally with access level)
+    | UserAssignment  # internal user ID
+    | MarketplaceAssignment  # reserved for Phase 3
+)
 
 
 class HumanIdentity(BaseModel):

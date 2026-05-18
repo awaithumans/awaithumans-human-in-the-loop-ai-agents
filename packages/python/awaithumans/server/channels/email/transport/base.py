@@ -27,8 +27,7 @@ _HEADER_INJECTION_RE = re.compile(r"[\r\n]")
 def _no_crlf(value: str, field_name: str) -> str:
     if _HEADER_INJECTION_RE.search(value):
         raise ValueError(
-            f"Email header '{field_name}' contains CR/LF; rejected to "
-            "prevent header injection."
+            f"Email header '{field_name}' contains CR/LF; rejected to prevent header injection."
         )
     return value
 

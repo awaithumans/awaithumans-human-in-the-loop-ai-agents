@@ -29,8 +29,7 @@ def test_settings_does_not_crash_on_unknown_awaithumans_key(
     """The bug-was-here case: an SDK-side var in a shared .env."""
     env = tmp_path / ".env"
     env.write_text(
-        "AWAITHUMANS_URL=http://localhost:3001\n"
-        "AWAITHUMANS_EMAIL_TRANSPORT=smtp\n",
+        "AWAITHUMANS_URL=http://localhost:3001\nAWAITHUMANS_EMAIL_TRANSPORT=smtp\n",
         encoding="utf-8",
     )
     monkeypatch.chdir(tmp_path)
@@ -41,8 +40,7 @@ def test_settings_does_not_crash_on_unknown_awaithumans_key(
 def test_unknown_env_keys_reports_sdk_only_var(tmp_path: Path) -> None:
     env = tmp_path / ".env"
     env.write_text(
-        "AWAITHUMANS_URL=http://localhost:3001\n"
-        "AWAITHUMANS_EMAIL_TRANSPORT=smtp\n",
+        "AWAITHUMANS_URL=http://localhost:3001\nAWAITHUMANS_EMAIL_TRANSPORT=smtp\n",
         encoding="utf-8",
     )
     unknown = unknown_env_keys(env_path=env)
@@ -83,8 +81,7 @@ def test_unknown_env_keys_ignores_non_awaithumans_keys(tmp_path: Path) -> None:
     """Other env vars (DATABASE_URL, PATH, etc.) are not our concern."""
     env = tmp_path / ".env"
     env.write_text(
-        "DATABASE_URL=postgresql://...\n"
-        "SOME_OTHER_KEY=value\n",
+        "DATABASE_URL=postgresql://...\nSOME_OTHER_KEY=value\n",
         encoding="utf-8",
     )
     assert unknown_env_keys(env_path=env) == []

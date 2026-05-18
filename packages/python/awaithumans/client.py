@@ -190,9 +190,7 @@ async def await_human(
 
         task_data = resp.json()
         task_id = task_data["id"]
-        _print_waiting_banner(
-            base_url=base_url, task_id=task_id, timeout_seconds=timeout_seconds
-        )
+        _print_waiting_banner(base_url=base_url, task_id=task_id, timeout_seconds=timeout_seconds)
 
     # ── Long-poll until completion or timeout ────────────────────────
     result = await _poll_until_terminal(

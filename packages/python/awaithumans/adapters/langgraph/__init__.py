@@ -52,7 +52,8 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
-from typing import Any, Awaitable, Callable, TypeVar
+from collections.abc import Awaitable, Callable
+from typing import Any, TypeVar
 
 import httpx
 from pydantic import BaseModel
@@ -296,14 +297,11 @@ async def await_human(
         raise TaskCancelledError(task)
     if status == "verification_exhausted":
         attempt = (
-            resume_value.get("verification_attempt", 0)
-            if isinstance(resume_value, dict)
-            else 0
+            resume_value.get("verification_attempt", 0) if isinstance(resume_value, dict) else 0
         )
         raise VerificationExhaustedError(task, attempt)
     raise RuntimeError(
-        f"LangGraph adapter saw unknown terminal status "
-        f"'{status}' for task '{task}'"
+        f"LangGraph adapter saw unknown terminal status '{status}' for task '{task}'"
     )
 
 
@@ -339,9 +337,7 @@ def _resolve_terminal(
     if status == "cancelled":
         raise TaskCancelledError(task)
     if status == "verification_exhausted":
-        raise VerificationExhaustedError(
-            task, task_record.get("verification_attempt", 0)
-        )
+        raise VerificationExhaustedError(task, task_record.get("verification_attempt", 0))
     raise RuntimeError(
         f"LangGraph adapter saw unknown terminal status '{status}' for task '{task}'"
     )

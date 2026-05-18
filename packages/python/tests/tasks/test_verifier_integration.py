@@ -82,9 +82,7 @@ async def test_complete_task_without_verifier_goes_straight_to_completed(
     session: AsyncSession,
 ) -> None:
     task = await _make_task(session)
-    completed = await complete_task(
-        session, task_id=task.id, response={"approved": True}
-    )
+    completed = await complete_task(session, task_id=task.id, response={"approved": True})
     assert completed.status == TaskStatus.COMPLETED
     assert completed.verifier_result is None
     assert completed.verification_attempt == 0
@@ -101,9 +99,7 @@ async def test_verifier_pass_marks_completed_and_stores_result(
 
     monkeypatch.setattr(task_verifier, "run_verifier", fake)
 
-    completed = await complete_task(
-        session, task_id=task.id, response={"approved": True}
-    )
+    completed = await complete_task(session, task_id=task.id, response={"approved": True})
     assert completed.status == TaskStatus.COMPLETED
     assert completed.verification_attempt == 1
     assert completed.verifier_result is not None
@@ -122,9 +118,7 @@ async def test_verifier_reject_with_attempts_left_marks_rejected(
 
     monkeypatch.setattr(task_verifier, "run_verifier", fake)
 
-    rejected = await complete_task(
-        session, task_id=task.id, response={"approved": True}
-    )
+    rejected = await complete_task(session, task_id=task.id, response={"approved": True})
     assert rejected.status == TaskStatus.REJECTED
     assert rejected.verification_attempt == 1
     # REJECTED is non-terminal — completed_at must NOT be stamped or the

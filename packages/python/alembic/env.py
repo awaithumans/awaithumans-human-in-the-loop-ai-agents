@@ -10,14 +10,15 @@ from __future__ import annotations
 
 from logging.config import fileConfig
 
-from alembic import context
 from sqlalchemy import engine_from_config, pool
 from sqlmodel import SQLModel
+
+from alembic import context
+from awaithumans.server.core.config import settings
 
 # Register every model so SQLModel.metadata sees them during autogenerate.
 # The import is side-effect only.
 from awaithumans.server.db import models  # noqa: F401
-from awaithumans.server.core.config import settings
 
 config = context.config
 

@@ -162,12 +162,8 @@ async def _attempt_post(
         "X-Awaithumans-Task-Id": delivery.task_id,
     }
     try:
-        async with httpx.AsyncClient(
-            timeout=WEBHOOK_DELIVERY_TIMEOUT_SECONDS
-        ) as client:
-            resp = await client.post(
-                delivery.url, content=delivery.body, headers=headers
-            )
+        async with httpx.AsyncClient(timeout=WEBHOOK_DELIVERY_TIMEOUT_SECONDS) as client:
+            resp = await client.post(delivery.url, content=delivery.body, headers=headers)
             if resp.status_code >= 400:
                 return False, resp.status_code, f"HTTP {resp.status_code}"
             return True, resp.status_code, None
@@ -295,8 +291,7 @@ async def _record_outcome(
         delay = backoff_delay(delivery.attempt_count)
         delivery.next_attempt_at = now + timedelta(seconds=delay)
         logger.warning(
-            "Webhook attempt failed task=%s url=%s attempts=%d "
-            "next_in=%ds error=%s",
+            "Webhook attempt failed task=%s url=%s attempts=%d next_in=%ds error=%s",
             delivery.task_id,
             delivery.url,
             delivery.attempt_count,
@@ -308,9 +303,7 @@ async def _record_outcome(
     await session.commit()
 
 
-async def process_due_deliveries(
-    session: AsyncSession, *, batch_size: int = 50
-) -> int:
+async def process_due_deliveries(session: AsyncSession, *, batch_size: int = 50) -> int:
     """Drive one tick of the queue. Returns count of attempts made.
 
     Called repeatedly by `webhook_scheduler`. Safe to call from a

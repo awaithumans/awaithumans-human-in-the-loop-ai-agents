@@ -36,9 +36,7 @@ def bootstrap_operator(
     """
     # Prompt for password if not supplied — match the dashboard /setup UX.
     if password is None:
-        password = typer.prompt(
-            "Operator password", hide_input=True, confirmation_prompt=True
-        )
+        password = typer.prompt("Operator password", hide_input=True, confirmation_prompt=True)
     if len(password) < 8:
         raise typer.BadParameter("Password must be at least 8 characters.")
 

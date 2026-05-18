@@ -44,9 +44,7 @@ from awaithumans.server.services.task_service import get_task
 if TYPE_CHECKING:  # pragma: no cover
     from slack_sdk.web.async_client import AsyncWebClient
 
-logger = logging.getLogger(
-    "awaithumans.server.channels.slack.post_completion"
-)
+logger = logging.getLogger("awaithumans.server.channels.slack.post_completion")
 
 
 async def update_slack_messages_for_task(task_id: str) -> None:
@@ -63,9 +61,7 @@ async def update_slack_messages_for_task(task_id: str) -> None:
         try:
             task = await get_task(session, task_id)
         except Exception as exc:  # noqa: BLE001
-            logger.warning(
-                "post_completion: failed to load task=%s: %s", task_id, exc
-            )
+            logger.warning("post_completion: failed to load task=%s: %s", task_id, exc)
             return
 
         messages = await list_messages_for_task(session, task_id)
@@ -91,8 +87,7 @@ async def update_slack_messages_for_task(task_id: str) -> None:
             client = await _resolve_client(team_id=msg.team_id, session=session)
             if client is None:
                 logger.info(
-                    "post_completion: no Slack client for team=%s; skipping "
-                    "message ts=%s",
+                    "post_completion: no Slack client for team=%s; skipping message ts=%s",
                     msg.team_id,
                     msg.ts,
                 )
@@ -113,8 +108,7 @@ async def update_slack_messages_for_task(task_id: str) -> None:
                 )
             except Exception as exc:  # noqa: BLE001
                 logger.warning(
-                    "post_completion: chat.update failed for task=%s "
-                    "channel=%s ts=%s: %s",
+                    "post_completion: chat.update failed for task=%s channel=%s ts=%s: %s",
                     task_id,
                     msg.channel,
                     msg.ts,
@@ -131,9 +125,7 @@ def _handoff_for_task(task) -> HandoffParams | None:  # noqa: ANN001 — Task mo
     )
 
 
-async def _resolve_client(
-    *, team_id: str | None, session
-) -> AsyncWebClient | None:
+async def _resolve_client(*, team_id: str | None, session) -> AsyncWebClient | None:
     """Pick the Slack client matching the message's workspace.
 
     We use the SAME workspace we posted from. If the OAuth installation

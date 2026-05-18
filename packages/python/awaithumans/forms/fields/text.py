@@ -27,9 +27,7 @@ class DisplayText(FormFieldBase):
     required: bool = False
 
 
-ShortTextSubtype = Literal[
-    "plain", "email", "url", "phone", "currency", "number", "password"
-]
+ShortTextSubtype = Literal["plain", "email", "url", "phone", "currency", "number", "password"]
 
 
 class ShortText(FormFieldBase):

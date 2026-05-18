@@ -56,9 +56,7 @@ def infer_field_from_type(
         return ShortText(name=name, label=label, required=is_required)
 
     if inner is int or inner is float:
-        return ShortText(
-            name=name, label=label, required=is_required, subtype="number"
-        )
+        return ShortText(name=name, label=label, required=is_required, subtype="number")
 
     if inner is _date:
         return DatePicker(name=name, label=label, required=is_required)
@@ -71,23 +69,17 @@ def infer_field_from_type(
 
     if origin is Literal:
         options = [SelectOption(value=str(v), label=str(v)) for v in args]
-        return SingleSelect(
-            name=name, label=label, required=is_required, options=options
-        )
+        return SingleSelect(name=name, label=label, required=is_required, options=options)
 
     if isinstance(inner, type) and issubclass(inner, enum.Enum):
         options = _options_from_enum(inner)
-        return SingleSelect(
-            name=name, label=label, required=is_required, options=options
-        )
+        return SingleSelect(name=name, label=label, required=is_required, options=options)
 
     if origin is list and args:
         first = args[0]
         if isinstance(first, type) and issubclass(first, enum.Enum):
             options = _options_from_enum(first)
-            return MultiSelect(
-                name=name, label=label, required=is_required, options=options
-            )
+            return MultiSelect(name=name, label=label, required=is_required, options=options)
 
     return LongText(name=name, label=label, required=is_required)
 

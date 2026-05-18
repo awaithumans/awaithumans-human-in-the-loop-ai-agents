@@ -35,9 +35,7 @@ def test_env_client_built_when_set(reset_env_token) -> None:
 
 
 @pytest.mark.asyncio
-async def test_client_for_team_uses_stored_installation(
-    session, reset_env_token
-) -> None:
+async def test_client_for_team_uses_stored_installation(session, reset_env_token) -> None:
     settings.SLACK_BOT_TOKEN = None  # force installation lookup
     await upsert_installation(
         session,
@@ -53,9 +51,7 @@ async def test_client_for_team_uses_stored_installation(
 
 
 @pytest.mark.asyncio
-async def test_client_for_team_falls_back_to_env_when_missing(
-    session, reset_env_token
-) -> None:
+async def test_client_for_team_falls_back_to_env_when_missing(session, reset_env_token) -> None:
     settings.SLACK_BOT_TOKEN = "xoxb-env-fallback"
     client = await get_client_for_team(session, "T_UNKNOWN")
     assert client is not None
@@ -63,9 +59,7 @@ async def test_client_for_team_falls_back_to_env_when_missing(
 
 
 @pytest.mark.asyncio
-async def test_client_for_team_none_when_no_install_and_no_env(
-    session, reset_env_token
-) -> None:
+async def test_client_for_team_none_when_no_install_and_no_env(session, reset_env_token) -> None:
     settings.SLACK_BOT_TOKEN = None
     assert await get_client_for_team(session, "T_UNKNOWN") is None
 
@@ -122,8 +116,6 @@ async def test_default_client_ambiguous_multiple(session, reset_env_token) -> No
 
 
 @pytest.mark.asyncio
-async def test_default_client_no_installations_no_token(
-    session, reset_env_token
-) -> None:
+async def test_default_client_no_installations_no_token(session, reset_env_token) -> None:
     settings.SLACK_BOT_TOKEN = None
     assert await get_default_client(session) is None

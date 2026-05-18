@@ -48,9 +48,7 @@ def dashboard_dir(tmp_path: Path) -> Path:
         ("settings", "settings page"),
         ("task", "task page"),
     ):
-        (dist / f"{name}.html").write_text(
-            f"<html><body>{marker}</body></html>"
-        )
+        (dist / f"{name}.html").write_text(f"<html><body>{marker}</body></html>")
         meta = dist / name
         meta.mkdir()
         (meta / f"__next.{name}.txt").write_text("(metadata)")

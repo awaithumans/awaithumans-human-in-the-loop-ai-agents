@@ -84,8 +84,7 @@ def test_redact_payload_hides_values() -> None:
         redact_payload=True,
     )
     text = "\n".join(
-        b.get("text", {}).get("text", "") for b in modal["blocks"]
-        if b.get("type") == "section"
+        b.get("text", {}).get("text", "") for b in modal["blocks"] if b.get("type") == "section"
     )
     assert "abc" not in text
 
@@ -96,9 +95,9 @@ def test_redact_payload_hides_values() -> None:
 def _input_for(fields, name):
     modal = _modal(fields)
     block = next(
-        b for b in modal["blocks"]
-        if b.get("type") == "input"
-        and b.get("block_id") == f"{SLACK_BLOCK_ID_PREFIX}{name}"
+        b
+        for b in modal["blocks"]
+        if b.get("type") == "input" and b.get("block_id") == f"{SLACK_BLOCK_ID_PREFIX}{name}"
     )
     return block["element"], block
 
@@ -111,9 +110,7 @@ def test_switch_renders_radio_buttons() -> None:
 
 
 def test_switch_default_becomes_initial_option() -> None:
-    elem, _ = _input_for(
-        [_name(switch(label="OK", default=True), "ok")], "ok"
-    )
+    elem, _ = _input_for([_name(switch(label="OK", default=True), "ok")], "ok")
     assert elem["initial_option"]["value"] == "true"
 
 
@@ -121,9 +118,7 @@ def test_short_text_subtypes_pick_typed_elements() -> None:
     elem_email, _ = _input_for([_name(email(label="E"), "e")], "e")
     assert elem_email["type"] == "email_text_input"
 
-    elem_currency, _ = _input_for(
-        [_name(currency(currency_code="USD", label="Amt"), "amt")], "amt"
-    )
+    elem_currency, _ = _input_for([_name(currency(currency_code="USD", label="Amt"), "amt")], "amt")
     assert elem_currency["type"] == "number_input"
     assert elem_currency["is_decimal_allowed"] is True
 
@@ -168,7 +163,12 @@ def test_multi_select_over_10_uses_multi_static_select() -> None:
 
 def test_picture_choice_single_falls_back_to_static_select() -> None:
     elem, _ = _input_for(
-        [_name(picture_choice(options=[{"value": "a", "label": "A", "image_url": "x"}], label="P"), "p")],
+        [
+            _name(
+                picture_choice(options=[{"value": "a", "label": "A", "image_url": "x"}], label="P"),
+                "p",
+            )
+        ],
         "p",
     )
     assert elem["type"] == "static_select"
@@ -176,14 +176,16 @@ def test_picture_choice_single_falls_back_to_static_select() -> None:
 
 def test_picture_choice_multiple_uses_multi_static_select() -> None:
     elem, _ = _input_for(
-        [_name(
-            picture_choice(
-                options=[{"value": "a", "label": "A", "image_url": "x"}],
-                multiple=True,
-                label="P",
-            ),
-            "p",
-        )],
+        [
+            _name(
+                picture_choice(
+                    options=[{"value": "a", "label": "A", "image_url": "x"}],
+                    multiple=True,
+                    label="P",
+                ),
+                "p",
+            )
+        ],
         "p",
     )
     assert elem["type"] == "multi_static_select"
@@ -195,9 +197,7 @@ def test_date_picker_emits_datepicker() -> None:
 
 
 def test_datetime_picker_emits_datetimepicker() -> None:
-    elem, _ = _input_for(
-        [_name(datetime_picker(label="When"), "when")], "when"
-    )
+    elem, _ = _input_for([_name(datetime_picker(label="When"), "when")], "when")
     assert elem["type"] == "datetimepicker"
 
 
@@ -207,35 +207,27 @@ def test_time_picker_emits_timepicker() -> None:
 
 
 def test_slider_emits_number_input_with_bounds() -> None:
-    elem, _ = _input_for(
-        [_name(slider(min=0, max=10, step=1, label="Risk"), "risk")], "risk"
-    )
+    elem, _ = _input_for([_name(slider(min=0, max=10, step=1, label="Risk"), "risk")], "risk")
     assert elem["type"] == "number_input"
     assert float(elem["min_value"]) == 0
     assert float(elem["max_value"]) == 10
 
 
 def test_star_rating_emits_static_select_with_star_labels() -> None:
-    elem, _ = _input_for(
-        [_name(star_rating(max=5, label="Quality"), "q")], "q"
-    )
+    elem, _ = _input_for([_name(star_rating(max=5, label="Quality"), "q")], "q")
     assert elem["type"] == "static_select"
     assert len(elem["options"]) == 5
     assert "★" in elem["options"][-1]["text"]["text"]
 
 
 def test_opinion_scale_emits_numeric_static_select() -> None:
-    elem, _ = _input_for(
-        [_name(opinion_scale(min=1, max=5, label="NPS"), "nps")], "nps"
-    )
+    elem, _ = _input_for([_name(opinion_scale(min=1, max=5, label="NPS"), "nps")], "nps")
     assert elem["type"] == "static_select"
     assert {o["value"] for o in elem["options"]} == {"1", "2", "3", "4", "5"}
 
 
 def test_file_upload_emits_file_input() -> None:
-    elem, _ = _input_for(
-        [_name(file_upload(label="Upload", accept=[".pdf"]), "doc")], "doc"
-    )
+    elem, _ = _input_for([_name(file_upload(label="Upload", accept=[".pdf"]), "doc")], "doc")
     assert elem["type"] == "file_input"
     assert elem["filetypes"] == ["pdf"]
     assert elem["max_files"] == 1
@@ -256,9 +248,7 @@ def test_signature_raises_unrenderable() -> None:
 
 
 def test_ranking_raises_unrenderable() -> None:
-    form = FormDefinition(
-        fields=[_name(ranking(options=["a", "b"], label="Rank"), "rank")]
-    )
+    form = FormDefinition(fields=[_name(ranking(options=["a", "b"], label="Rank"), "rank")])
     with pytest.raises(UnrenderableInSlackError):
         form_to_modal(
             form=form,

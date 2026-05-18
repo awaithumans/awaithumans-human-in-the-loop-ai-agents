@@ -218,19 +218,19 @@ WEBHOOK_DELIVERY_TIMEOUT_SECONDS = 10
 # next workday, then daily so a multi-day outage still gets one
 # attempt per day without burning through retries.
 WEBHOOK_RETRY_BACKOFF_SECONDS: tuple[int, ...] = (
-    30,        # 30s
-    60,        # 1m
-    120,       # 2m
-    300,       # 5m
-    900,       # 15m
-    1800,      # 30m
-    3600,      # 1h
-    7200,      # 2h
-    14400,     # 4h
-    28800,     # 8h
-    86400,     # 24h
-    86400,     # 24h
-    86400,     # 24h
+    30,  # 30s
+    60,  # 1m
+    120,  # 2m
+    300,  # 5m
+    900,  # 15m
+    1800,  # 30m
+    3600,  # 1h
+    7200,  # 2h
+    14400,  # 4h
+    28800,  # 8h
+    86400,  # 24h
+    86400,  # 24h
+    86400,  # 24h
 )
 
 # Hard cap on how long a delivery row stays in the queue. Past this

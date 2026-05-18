@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import enum
 from datetime import date, datetime, time
-from typing import List, Literal, Optional
+from typing import Literal
 
 from pydantic import BaseModel
 
@@ -105,7 +105,7 @@ def test_list_of_enum_infers_multi_select() -> None:
         BLUE = "blue"
 
     class M(BaseModel):
-        tags: List[Tag]
+        tags: list[Tag]
 
     form = extract_form(M)
     f = form.fields[0]
@@ -115,8 +115,8 @@ def test_list_of_enum_infers_multi_select() -> None:
 
 def test_optional_fields_are_not_required() -> None:
     class M(BaseModel):
-        name: Optional[str] = None
-        active: Optional[bool] = None
+        name: str | None = None
+        active: bool | None = None
 
     form = extract_form(M)
     assert all(f.required is False for f in form.fields)
@@ -127,7 +127,7 @@ def test_unknown_type_falls_back_to_long_text() -> None:
         pass
 
     class M(BaseModel):
-        blob: "Weird"
+        blob: Weird
 
         model_config = {"arbitrary_types_allowed": True}
 

@@ -19,6 +19,7 @@ fast-failing on unknown emails would leak account existence.
 
 from __future__ import annotations
 
+import contextlib
 import logging
 
 from argon2 import PasswordHasher
@@ -64,7 +65,6 @@ def dummy_verify(password: str) -> None:
 
     Result is discarded — this function only exists to spend CPU.
     """
-    try:
+    # Any outcome is fine; we just wanted the CPU spend.
+    with contextlib.suppress(Exception):
         _hasher.verify(_DUMMY_HASH, password)
-    except Exception:  # noqa: BLE001 — any outcome is fine; we just wanted the CPU spend
-        pass

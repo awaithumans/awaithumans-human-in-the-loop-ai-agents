@@ -24,13 +24,6 @@ from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
 from sqlmodel import SQLModel
 
-# Register models so create_all picks up the table.
-from awaithumans.server.db.models import (  # noqa: F401
-    AuditEntry,
-    SlackInstallation,
-    Task,
-)
-from awaithumans.server.core import encryption
 from awaithumans.server.core.config import settings
 from awaithumans.server.core.encryption import (
     EncryptionKeyError,
@@ -38,6 +31,13 @@ from awaithumans.server.core.encryption import (
     decrypt_str,
     encrypt_str,
     reset_key_cache,
+)
+
+# Register models so create_all picks up the table.
+from awaithumans.server.db.models import (  # noqa: F401
+    AuditEntry,
+    SlackInstallation,
+    Task,
 )
 from awaithumans.server.services.slack_installation_service import (
     get_installation,

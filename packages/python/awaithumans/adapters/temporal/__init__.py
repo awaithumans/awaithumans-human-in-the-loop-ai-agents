@@ -431,12 +431,8 @@ def _resolve_terminal(
     if status == "cancelled":
         raise TaskCancelledError(task)
     if status == "verification_exhausted":
-        raise VerificationExhaustedError(
-            task, task_record.get("verification_attempt", 0)
-        )
-    raise RuntimeError(
-        f"Temporal adapter saw unknown terminal status '{status}' for task '{task}'"
-    )
+        raise VerificationExhaustedError(task, task_record.get("verification_attempt", 0))
+    raise RuntimeError(f"Temporal adapter saw unknown terminal status '{status}' for task '{task}'")
 
 
 # ─── User-web-server-side: dispatch_signal ──────────────────────────

@@ -45,9 +45,7 @@ class ResendTransport:
         if message.reply_to:
             body["reply_to"] = message.reply_to
         if message.tags:
-            body["tags"] = [
-                {"name": k, "value": v} for k, v in message.tags.items()
-            ]
+            body["tags"] = [{"name": k, "value": v} for k, v in message.tags.items()]
 
         async with httpx.AsyncClient(timeout=10) as http:
             resp = await http.post(
@@ -65,9 +63,7 @@ class ResendTransport:
                 resp.status_code,
                 resp.text[:500],
             )
-            raise EmailTransportError(
-                f"Resend returned HTTP {resp.status_code}: {resp.text[:200]}"
-            )
+            raise EmailTransportError(f"Resend returned HTTP {resp.status_code}: {resp.text[:200]}")
 
         data = resp.json() if resp.content else {}
         return EmailSendResult(

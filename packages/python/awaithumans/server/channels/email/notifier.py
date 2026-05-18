@@ -77,9 +77,7 @@ async def notify_task(
         # wrote it tz-aware. `to_utc_unix` coerces; calling `.timestamp()`
         # directly here would silently shift the URL's expiry by the
         # local-UTC offset and kill links at birth for east-of-UTC users.
-        handoff_exp_unix = (
-            to_utc_unix(task.timeout_at) if task.timeout_at else None
-        )
+        handoff_exp_unix = to_utc_unix(task.timeout_at) if task.timeout_at else None
 
         task_status = task.status.value if hasattr(task.status, "value") else str(task.status)
 

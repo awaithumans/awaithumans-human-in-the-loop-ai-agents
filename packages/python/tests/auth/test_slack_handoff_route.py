@@ -49,9 +49,7 @@ def test_valid_signature_mints_session_and_redirects(
 ) -> None:
     task_id = "task_" + "a" * 28
     exp = _far_future()
-    sig = sign_handoff(
-        user_id=operator_user.id, task_id=task_id, exp_unix=exp
-    )
+    sig = sign_handoff(user_id=operator_user.id, task_id=task_id, exp_unix=exp)
 
     resp = client.get(
         "/api/auth/slack-handoff",
@@ -72,9 +70,7 @@ def test_minted_session_is_valid_for_subsequent_requests(
     is just decoration."""
     task_id = "task_" + "b" * 28
     exp = _far_future()
-    sig = sign_handoff(
-        user_id=operator_user.id, task_id=task_id, exp_unix=exp
-    )
+    sig = sign_handoff(user_id=operator_user.id, task_id=task_id, exp_unix=exp)
 
     handoff = client.get(
         "/api/auth/slack-handoff",
@@ -92,9 +88,7 @@ def test_minted_session_is_valid_for_subsequent_requests(
 # ─── Reject paths ────────────────────────────────────────────────────
 
 
-def test_bad_signature_rejected(
-    client: TestClient, operator_user: User
-) -> None:
+def test_bad_signature_rejected(client: TestClient, operator_user: User) -> None:
     task_id = "task_" + "c" * 28
     exp = _far_future()
     # Sign for a DIFFERENT user so the signature is valid-shaped but
@@ -109,16 +103,12 @@ def test_bad_signature_rejected(
     assert DASHBOARD_SESSION_COOKIE_NAME not in resp.cookies
 
 
-def test_expired_link_rejected(
-    client: TestClient, operator_user: User
-) -> None:
+def test_expired_link_rejected(client: TestClient, operator_user: User) -> None:
     """A URL with `e=` in the past is rejected even when the
     signature itself is valid for that exp."""
     task_id = "task_" + "d" * 28
     expired = int(time.time()) - 1
-    sig = sign_handoff(
-        user_id=operator_user.id, task_id=task_id, exp_unix=expired
-    )
+    sig = sign_handoff(user_id=operator_user.id, task_id=task_id, exp_unix=expired)
 
     resp = client.get(
         "/api/auth/slack-handoff",
@@ -148,9 +138,7 @@ def test_unknown_user_rejected(client: TestClient) -> None:
     assert resp.status_code == 403
 
 
-def test_missing_signature_rejected(
-    client: TestClient, operator_user: User
-) -> None:
+def test_missing_signature_rejected(client: TestClient, operator_user: User) -> None:
     """Anyone hitting the endpoint with no signature gets 422 from
     FastAPI's required-query-param validation, not 200."""
     resp = client.get(

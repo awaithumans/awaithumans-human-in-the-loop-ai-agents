@@ -96,9 +96,7 @@ async def list_users_route(
     active: bool | None = Query(default=None),
     session: AsyncSession = Depends(get_session),
 ) -> list[UserResponse]:
-    rows = await list_users(
-        session, role=role, access_level=access_level, pool=pool, active=active
-    )
+    rows = await list_users(session, role=role, access_level=access_level, pool=pool, active=active)
     return [_to_public(r) for r in rows]
 
 

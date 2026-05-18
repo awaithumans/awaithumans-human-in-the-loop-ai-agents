@@ -89,9 +89,7 @@ class _ScrubFilter(logging.Filter):
                     for k, v in record.args.items()
                 }
             else:
-                scrubbed = tuple(
-                    scrub_text(a) if isinstance(a, str) else a for a in record.args
-                )
+                scrubbed = tuple(scrub_text(a) if isinstance(a, str) else a for a in record.args)
             record.args = scrubbed  # type: ignore[assignment]
         return True
 

@@ -23,7 +23,6 @@ from awaithumans.server.services.user_service import (
     update_user,
 )
 
-
 # ─── At-least-one-address rule ────────────────────────────────────────
 
 

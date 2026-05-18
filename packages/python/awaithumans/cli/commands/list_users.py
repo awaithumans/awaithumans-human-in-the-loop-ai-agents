@@ -43,9 +43,7 @@ def list_users_cmd(
         typer.echo(header)
         typer.echo("-" * len(header))
         for u in users:
-            slack_addr = (
-                f"{u.slack_team_id}/{u.slack_user_id}" if u.slack_team_id else ""
-            )
+            slack_addr = f"{u.slack_team_id}/{u.slack_user_id}" if u.slack_team_id else ""
             typer.echo(
                 f"{u.id[:10]:<12} "
                 f"{(u.email or ''):<30} "

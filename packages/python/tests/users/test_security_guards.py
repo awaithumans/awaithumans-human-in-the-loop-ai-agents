@@ -20,15 +20,12 @@ from awaithumans.server.services.user_service import (
     update_user,
 )
 
-
 # ─── Last-operator guard ──────────────────────────────────────────────
 
 
 @pytest.mark.asyncio
 async def test_delete_last_operator_refused(session: AsyncSession) -> None:
-    op = await create_user(
-        session, email="op@example.com", is_operator=True, password="hunter2a"
-    )
+    op = await create_user(session, email="op@example.com", is_operator=True, password="hunter2a")
 
     with pytest.raises(LastOperatorError) as exc:
         await delete_user(session, op.id)
@@ -37,12 +34,8 @@ async def test_delete_last_operator_refused(session: AsyncSession) -> None:
 
 @pytest.mark.asyncio
 async def test_delete_operator_ok_when_another_exists(session: AsyncSession) -> None:
-    op1 = await create_user(
-        session, email="op1@example.com", is_operator=True, password="pass1234"
-    )
-    await create_user(
-        session, email="op2@example.com", is_operator=True, password="pass2345"
-    )
+    op1 = await create_user(session, email="op1@example.com", is_operator=True, password="pass1234")
+    await create_user(session, email="op2@example.com", is_operator=True, password="pass2345")
 
     ok = await delete_user(session, op1.id)
     assert ok is True
@@ -59,9 +52,7 @@ async def test_delete_non_operator_always_ok(session: AsyncSession) -> None:
 
 @pytest.mark.asyncio
 async def test_demote_last_operator_refused(session: AsyncSession) -> None:
-    op = await create_user(
-        session, email="op@example.com", is_operator=True, password="hunter2a"
-    )
+    op = await create_user(session, email="op@example.com", is_operator=True, password="hunter2a")
 
     with pytest.raises(LastOperatorError) as exc:
         await update_user(session, op.id, is_operator=False)
@@ -70,9 +61,7 @@ async def test_demote_last_operator_refused(session: AsyncSession) -> None:
 
 @pytest.mark.asyncio
 async def test_deactivate_last_operator_refused(session: AsyncSession) -> None:
-    op = await create_user(
-        session, email="op@example.com", is_operator=True, password="hunter2a"
-    )
+    op = await create_user(session, email="op@example.com", is_operator=True, password="hunter2a")
 
     with pytest.raises(LastOperatorError) as exc:
         await update_user(session, op.id, active=False)
@@ -81,12 +70,8 @@ async def test_deactivate_last_operator_refused(session: AsyncSession) -> None:
 
 @pytest.mark.asyncio
 async def test_demote_operator_ok_when_another_exists(session: AsyncSession) -> None:
-    op1 = await create_user(
-        session, email="op1@example.com", is_operator=True, password="pass1234"
-    )
-    await create_user(
-        session, email="op2@example.com", is_operator=True, password="pass2345"
-    )
+    op1 = await create_user(session, email="op1@example.com", is_operator=True, password="pass1234")
+    await create_user(session, email="op2@example.com", is_operator=True, password="pass2345")
 
     updated = await update_user(session, op1.id, is_operator=False)
     assert updated.is_operator is False
@@ -141,9 +126,7 @@ def test_dummy_verify_takes_comparable_time_to_real_verify() -> None:
     # Allow 2x tolerance — CI machines are noisy. The point is that
     # dummy_verify is not *orders of magnitude* faster than the real
     # path (which is what an attacker would exploit).
-    ratio = max(real_duration, dummy_duration) / max(
-        min(real_duration, dummy_duration), 1e-6
-    )
+    ratio = max(real_duration, dummy_duration) / max(min(real_duration, dummy_duration), 1e-6)
     assert ratio < 2.0, (
         f"dummy_verify timing drift: real={real_duration:.3f}s, "
         f"dummy={dummy_duration:.3f}s (ratio={ratio:.2f})"

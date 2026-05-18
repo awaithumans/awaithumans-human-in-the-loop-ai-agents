@@ -53,13 +53,15 @@ async def test_empty_stats(session: AsyncSession) -> None:
 @pytest.mark.asyncio
 async def test_totals_count_all_statuses(session: AsyncSession) -> None:
     now = datetime.now(timezone.utc)
-    session.add_all([
-        _task(created_at=now, status=TaskStatus.CREATED),
-        _task(created_at=now, status=TaskStatus.CREATED),
-        _task(created_at=now, status=TaskStatus.COMPLETED, completed_at=now),
-        _task(created_at=now, status=TaskStatus.TIMED_OUT),
-        _task(created_at=now, status=TaskStatus.CANCELLED),
-    ])
+    session.add_all(
+        [
+            _task(created_at=now, status=TaskStatus.CREATED),
+            _task(created_at=now, status=TaskStatus.CREATED),
+            _task(created_at=now, status=TaskStatus.COMPLETED, completed_at=now),
+            _task(created_at=now, status=TaskStatus.TIMED_OUT),
+            _task(created_at=now, status=TaskStatus.CANCELLED),
+        ]
+    )
     await session.commit()
 
     stats = await get_task_stats(session, window_days=30)
@@ -73,15 +75,17 @@ async def test_totals_count_all_statuses(session: AsyncSession) -> None:
 async def test_completion_rate(session: AsyncSession) -> None:
     """2 completed out of 4 terminal → 0.5."""
     now = datetime.now(timezone.utc)
-    session.add_all([
-        _task(created_at=now, status=TaskStatus.COMPLETED, completed_at=now),
-        _task(created_at=now, status=TaskStatus.COMPLETED, completed_at=now),
-        _task(created_at=now, status=TaskStatus.TIMED_OUT),
-        _task(created_at=now, status=TaskStatus.CANCELLED),
-        # In-progress ones DON'T count as "terminal" for the rate.
-        _task(created_at=now, status=TaskStatus.CREATED),
-        _task(created_at=now, status=TaskStatus.IN_PROGRESS),
-    ])
+    session.add_all(
+        [
+            _task(created_at=now, status=TaskStatus.COMPLETED, completed_at=now),
+            _task(created_at=now, status=TaskStatus.COMPLETED, completed_at=now),
+            _task(created_at=now, status=TaskStatus.TIMED_OUT),
+            _task(created_at=now, status=TaskStatus.CANCELLED),
+            # In-progress ones DON'T count as "terminal" for the rate.
+            _task(created_at=now, status=TaskStatus.CREATED),
+            _task(created_at=now, status=TaskStatus.IN_PROGRESS),
+        ]
+    )
     await session.commit()
 
     stats = await get_task_stats(session, window_days=30)
@@ -91,23 +95,25 @@ async def test_completion_rate(session: AsyncSession) -> None:
 @pytest.mark.asyncio
 async def test_avg_completion_seconds(session: AsyncSession) -> None:
     now = datetime.now(timezone.utc)
-    session.add_all([
-        _task(
-            created_at=now - timedelta(minutes=5),
-            status=TaskStatus.COMPLETED,
-            completed_at=now,  # 300s
-        ),
-        _task(
-            created_at=now - timedelta(minutes=15),
-            status=TaskStatus.COMPLETED,
-            completed_at=now,  # 900s
-        ),
-        # non-completed — excluded
-        _task(
-            created_at=now - timedelta(minutes=1),
-            status=TaskStatus.TIMED_OUT,
-        ),
-    ])
+    session.add_all(
+        [
+            _task(
+                created_at=now - timedelta(minutes=5),
+                status=TaskStatus.COMPLETED,
+                completed_at=now,  # 300s
+            ),
+            _task(
+                created_at=now - timedelta(minutes=15),
+                status=TaskStatus.COMPLETED,
+                completed_at=now,  # 900s
+            ),
+            # non-completed — excluded
+            _task(
+                created_at=now - timedelta(minutes=1),
+                status=TaskStatus.TIMED_OUT,
+            ),
+        ]
+    )
     await session.commit()
 
     stats = await get_task_stats(session, window_days=30)
@@ -119,10 +125,12 @@ async def test_by_day_zero_fills_window(session: AsyncSession) -> None:
     """Every day in the window gets an entry — even days with no traffic."""
     now = datetime.now(timezone.utc)
     # Create two tasks, three days apart.
-    session.add_all([
-        _task(created_at=now, status=TaskStatus.CREATED),
-        _task(created_at=now - timedelta(days=3), status=TaskStatus.CREATED),
-    ])
+    session.add_all(
+        [
+            _task(created_at=now, status=TaskStatus.CREATED),
+            _task(created_at=now - timedelta(days=3), status=TaskStatus.CREATED),
+        ]
+    )
     await session.commit()
 
     stats = await get_task_stats(session, window_days=7)
@@ -138,21 +146,21 @@ async def test_by_day_zero_fills_window(session: AsyncSession) -> None:
 @pytest.mark.asyncio
 async def test_by_day_counts_completions(session: AsyncSession) -> None:
     now = datetime.now(timezone.utc)
-    session.add_all([
-        _task(
-            created_at=now - timedelta(days=2),
-            status=TaskStatus.COMPLETED,
-            completed_at=now,
-        ),
-    ])
+    session.add_all(
+        [
+            _task(
+                created_at=now - timedelta(days=2),
+                status=TaskStatus.COMPLETED,
+                completed_at=now,
+            ),
+        ]
+    )
     await session.commit()
 
     stats = await get_task_stats(session, window_days=7)
     today_entry = next(d for d in stats.by_day if d.date == now.date().isoformat())
     two_days_ago = next(
-        d
-        for d in stats.by_day
-        if d.date == (now.date() - timedelta(days=2)).isoformat()
+        d for d in stats.by_day if d.date == (now.date() - timedelta(days=2)).isoformat()
     )
     # Created counted at creation date.
     assert two_days_ago.created == 1
@@ -163,32 +171,34 @@ async def test_by_day_counts_completions(session: AsyncSession) -> None:
 @pytest.mark.asyncio
 async def test_by_channel_only_counts_completed(session: AsyncSession) -> None:
     now = datetime.now(timezone.utc)
-    session.add_all([
-        _task(
-            created_at=now,
-            status=TaskStatus.COMPLETED,
-            completed_at=now,
-            channel="dashboard",
-        ),
-        _task(
-            created_at=now,
-            status=TaskStatus.COMPLETED,
-            completed_at=now,
-            channel="slack",
-        ),
-        _task(
-            created_at=now,
-            status=TaskStatus.COMPLETED,
-            completed_at=now,
-            channel="slack",
-        ),
-        # In-progress with a channel still shouldn't be counted.
-        _task(
-            created_at=now,
-            status=TaskStatus.IN_PROGRESS,
-            channel="slack",
-        ),
-    ])
+    session.add_all(
+        [
+            _task(
+                created_at=now,
+                status=TaskStatus.COMPLETED,
+                completed_at=now,
+                channel="dashboard",
+            ),
+            _task(
+                created_at=now,
+                status=TaskStatus.COMPLETED,
+                completed_at=now,
+                channel="slack",
+            ),
+            _task(
+                created_at=now,
+                status=TaskStatus.COMPLETED,
+                completed_at=now,
+                channel="slack",
+            ),
+            # In-progress with a channel still shouldn't be counted.
+            _task(
+                created_at=now,
+                status=TaskStatus.IN_PROGRESS,
+                channel="slack",
+            ),
+        ]
+    )
     await session.commit()
 
     stats = await get_task_stats(session, window_days=30)
@@ -202,15 +212,17 @@ async def test_window_filters_old_rows(session: AsyncSession) -> None:
     They DO still show in `totals` — totals are all-time by design.
     """
     now = datetime.now(timezone.utc)
-    session.add_all([
-        _task(
-            created_at=now - timedelta(days=100),
-            status=TaskStatus.COMPLETED,
-            completed_at=now - timedelta(days=100),
-            channel="slack",
-        ),
-        _task(created_at=now, status=TaskStatus.CREATED),
-    ])
+    session.add_all(
+        [
+            _task(
+                created_at=now - timedelta(days=100),
+                status=TaskStatus.COMPLETED,
+                completed_at=now - timedelta(days=100),
+                channel="slack",
+            ),
+            _task(created_at=now, status=TaskStatus.CREATED),
+        ]
+    )
     await session.commit()
 
     stats = await get_task_stats(session, window_days=30)
@@ -224,10 +236,12 @@ async def test_window_filters_old_rows(session: AsyncSession) -> None:
 @pytest.mark.asyncio
 async def test_completion_rate_none_when_no_terminals(session: AsyncSession) -> None:
     now = datetime.now(timezone.utc)
-    session.add_all([
-        _task(created_at=now, status=TaskStatus.CREATED),
-        _task(created_at=now, status=TaskStatus.IN_PROGRESS),
-    ])
+    session.add_all(
+        [
+            _task(created_at=now, status=TaskStatus.CREATED),
+            _task(created_at=now, status=TaskStatus.IN_PROGRESS),
+        ]
+    )
     await session.commit()
 
     stats = await get_task_stats(session, window_days=30)

@@ -184,9 +184,7 @@ async def list_workspace_members(
         resp = await client.users_list()
     except SlackApiError as exc:
         # Specific catch — see auth.test above for rationale.
-        logger.warning(
-            "Slack users.list failed for team_id=%s: %s", team_id, exc
-        )
+        logger.warning("Slack users.list failed for team_id=%s: %s", team_id, exc)
         raise HTTPException(
             status_code=502,
             detail=(

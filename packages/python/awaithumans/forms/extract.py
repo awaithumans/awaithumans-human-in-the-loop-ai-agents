@@ -41,9 +41,7 @@ def extract_form(model_cls: type[BaseModel]) -> FormDefinition:
                 }
             )
         else:
-            field = infer_field_from_type(
-                attr_name, field_info.annotation, is_required
-            )
+            field = infer_field_from_type(attr_name, field_info.annotation, is_required)
 
         fields.append(field)
 

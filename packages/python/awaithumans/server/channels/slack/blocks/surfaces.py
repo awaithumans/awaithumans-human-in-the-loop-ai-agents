@@ -78,23 +78,26 @@ def form_to_modal(
     """
     blocks: list[dict[str, Any]] = []
 
-    blocks.append({
-        "type": "header",
-        "text": {
-            "type": "plain_text",
-            "text": truncate(task_title, SLACK_HEADER_TEXT_MAX),
-        },
-    })
+    blocks.append(
+        {
+            "type": "header",
+            "text": {
+                "type": "plain_text",
+                "text": truncate(task_title, SLACK_HEADER_TEXT_MAX),
+            },
+        }
+    )
 
     if task_payload and not redact_payload:
         lines = [
-            f"*{k}*: {truncate(str(v), SLACK_CONTEXT_VALUE_MAX)}"
-            for k, v in task_payload.items()
+            f"*{k}*: {truncate(str(v), SLACK_CONTEXT_VALUE_MAX)}" for k, v in task_payload.items()
         ]
-        blocks.append({
-            "type": "section",
-            "text": {"type": "mrkdwn", "text": "\n".join(lines)},
-        })
+        blocks.append(
+            {
+                "type": "section",
+                "text": {"type": "mrkdwn", "text": "\n".join(lines)},
+            }
+        )
         blocks.append({"type": "divider"})
 
     for field in form.fields:
@@ -152,27 +155,33 @@ def open_review_message_blocks(
         # "Open in Slack" button — clicking claim both assigns AND
         # opens the modal in one step (modal flow is downstream of the
         # atomic claim).
-        elements.append({
-            "type": "button",
-            "text": {"type": "plain_text", "text": "Claim this task"},
-            "style": "primary",
-            "action_id": claim_button_action_id,
-            "value": task_id,
-        })
+        elements.append(
+            {
+                "type": "button",
+                "text": {"type": "plain_text", "text": "Claim this task"},
+                "style": "primary",
+                "action_id": claim_button_action_id,
+                "value": task_id,
+            }
+        )
     elif not unsupported_fields:
-        elements.append({
+        elements.append(
+            {
+                "type": "button",
+                "text": {"type": "plain_text", "text": "Open in Slack"},
+                "style": "primary",
+                "action_id": open_button_action_id,
+                "value": task_id,
+            }
+        )
+    elements.append(
+        {
             "type": "button",
-            "text": {"type": "plain_text", "text": "Open in Slack"},
-            "style": "primary",
-            "action_id": open_button_action_id,
-            "value": task_id,
-        })
-    elements.append({
-        "type": "button",
-        "text": {"type": "plain_text", "text": "Review in dashboard"},
-        "url": review_url,
-        "action_id": "awaithumans.open_dashboard",
-    })
+            "text": {"type": "plain_text", "text": "Review in dashboard"},
+            "url": review_url,
+            "action_id": "awaithumans.open_dashboard",
+        }
+    )
 
     return [
         {"type": "section", "text": {"type": "mrkdwn", "text": text}},
@@ -214,17 +223,19 @@ def terminal_message_blocks(
     ]
 
     if review_url:
-        blocks.append({
-            "type": "actions",
-            "elements": [
-                {
-                    "type": "button",
-                    "text": {"type": "plain_text", "text": "View in dashboard"},
-                    "url": review_url,
-                    "action_id": "awaithumans.open_dashboard",
-                }
-            ],
-        })
+        blocks.append(
+            {
+                "type": "actions",
+                "elements": [
+                    {
+                        "type": "button",
+                        "text": {"type": "plain_text", "text": "View in dashboard"},
+                        "url": review_url,
+                        "action_id": "awaithumans.open_dashboard",
+                    }
+                ],
+            }
+        )
 
     return blocks
 
@@ -257,10 +268,7 @@ def claimed_message_blocks(
     """Replacement blocks posted via chat.update after a successful
     claim. Shows who claimed the task and keeps a dashboard link for
     observers."""
-    text = (
-        f"*Claimed by {claimed_by_display}:* "
-        f"{truncate(task_title, _MESSAGE_TITLE_MAX)}"
-    )
+    text = f"*Claimed by {claimed_by_display}:* {truncate(task_title, _MESSAGE_TITLE_MAX)}"
     return [
         {"type": "section", "text": {"type": "mrkdwn", "text": text}},
         {
@@ -284,35 +292,43 @@ def _field_to_blocks(field: Any) -> list[dict[str, Any]]:
     """Render a single primitive as 1..N Block Kit blocks."""
     # Non-input primitives first — these render as top-level blocks.
     if isinstance(field, DisplayText):
-        return [{
-            "type": "section",
-            "text": {
-                "type": "mrkdwn",
-                "text": truncate(field.text, SLACK_PLAIN_TEXT_MAX),
-            },
-        }]
+        return [
+            {
+                "type": "section",
+                "text": {
+                    "type": "mrkdwn",
+                    "text": truncate(field.text, SLACK_PLAIN_TEXT_MAX),
+                },
+            }
+        ]
     if isinstance(field, Divider):
         return [{"type": "divider"}]
     if isinstance(field, Section):
-        out: list[dict[str, Any]] = [{
-            "type": "header",
-            "text": {
-                "type": "plain_text",
-                "text": truncate(field.title, SLACK_HEADER_TEXT_MAX),
-            },
-        }]
+        out: list[dict[str, Any]] = [
+            {
+                "type": "header",
+                "text": {
+                    "type": "plain_text",
+                    "text": truncate(field.title, SLACK_HEADER_TEXT_MAX),
+                },
+            }
+        ]
         if field.subtitle:
-            out.append({
-                "type": "context",
-                "elements": [{"type": "mrkdwn", "text": field.subtitle}],
-            })
+            out.append(
+                {
+                    "type": "context",
+                    "elements": [{"type": "mrkdwn", "text": field.subtitle}],
+                }
+            )
         return out
     if isinstance(field, Image):
-        return [{
-            "type": "image",
-            "image_url": field.url,
-            "alt_text": field.alt or field.label or "image",
-        }]
+        return [
+            {
+                "type": "image",
+                "image_url": field.url,
+                "alt_text": field.alt or field.label or "image",
+            }
+        ]
 
     # Input primitives — wrap each element in an `input` block.
     element_for_kind: dict[type, Any] = {
