@@ -9,7 +9,7 @@ import {
 	type Task,
 	type TaskStatus,
 } from "@/lib/server";
-import { assigneeLabel, cn, formatRelativeTime } from "@/lib/utils";
+import { assigneeLabel, formatRelativeTime } from "@/lib/utils";
 import {
 	SECONDS_PER_MINUTE,
 	TASK_ID_TRUNCATE_LENGTH,
@@ -49,15 +49,6 @@ interface FilterState {
 	pageSize: number;
 	offset: number;
 }
-
-const DEFAULT_FILTERS: FilterState = {
-	status: "all",
-	assignedTo: "",
-	unassigned: false,
-	mine: false,
-	pageSize: TASK_LIST_DEFAULT_PAGE_SIZE,
-	offset: 0,
-};
 
 /**
  * URL-synced state. Each filter knob writes through to the query
