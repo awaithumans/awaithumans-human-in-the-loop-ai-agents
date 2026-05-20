@@ -16,6 +16,29 @@ _Nothing yet — open the next change here._
 
 ---
 
+## [0.1.5] — 2026-05-19
+
+Two days after [v0.1.4](https://github.com/awaithumans/awaithumans/releases/tag/v0.1.4). Maintenance + discovery release: one PyPI-rendering bug fix from beta-tester feedback, the test-CI infrastructure that was missing, follow-up cleanups CI surfaced on first run, and a deliberate npm-keyword expansion as a discovery experiment. No API changes; safe drop-in upgrade.
+
+### Fixed
+
+- **PyPI README images render again.** v0.1.4's README pointed at `raw.githubusercontent.com`, which serves `application/octet-stream` — PyPI's strict MIME check rejects that and just doesn't render the image. Switched the demo GIF + logo to `cdn.jsdelivr.net/gh/`, which proxies GitHub content with the correct `image/gif` / `image/png` headers. npm rendered fine on 0.1.4; this fix is PyPI-specific. ([#124](https://github.com/awaithumans/awaithumans/pull/124))
+- **Python 3.10 support is real again.** Two production modules (`server/routes/embed.py`, `server/services/service_key_service.py`) plus one test file imported `datetime.UTC`, which only exists in 3.11+. pyproject declared 3.10 as the floor but the package crashed on import. Swapped to the long-form `datetime.timezone.utc`. ([#126](https://github.com/awaithumans/awaithumans/pull/126))
+- **Temporal adapter test collection no longer breaks the suite.** `tests/adapters/test_temporal_adapter.py` still imported `_create_task_activity`, the pre-refactor name; the public symbol is now `awaithumans_create_task`. Updated four call sites. ([#127](https://github.com/awaithumans/awaithumans/pull/127))
+- **Dashboard had four real unused locals** (`cn` import + `DEFAULT_FILTERS` const, in both the task queue and audit pages) — surfaced once strict tsconfig flags went in. ([#129](https://github.com/awaithumans/awaithumans/pull/129))
+
+### Added
+
+- **GitHub Actions tests workflow.** Three parallel jobs run on every PR and every push to `main`: Python 3.11 + 3.13 matrix (pytest), TypeScript SDK (vitest + tsc), dashboard (vitest + tsc). Concurrency group cancels superseded runs. The existing `migrations.yml` continues to cover Alembic separately. ([#125](https://github.com/awaithumans/awaithumans/pull/125))
+- **`noUnusedLocals` + `noUnusedParameters` in `tsconfig.base.json`** — future regressions now fail `npm run typecheck` instead of slipping through. ([#129](https://github.com/awaithumans/awaithumans/pull/129))
+
+### Changed
+
+- **Ruff cleanup pass across the Python package.** Lint drift had accumulated to 165 findings (mostly import-sort + trailing-comma); `ruff check --fix` + `ruff format` resolved 154 of them, 14 manual edits cleaned up the rest. `ruff check .` is now green; CI re-enabling the lint step is queued as a follow-up. No behavior change. ([#128](https://github.com/awaithumans/awaithumans/pull/128))
+- **TypeScript SDK npm keywords: 33 → 224** as a deliberate discovery experiment. npm is treated as a discovery surface rather than a one-liner index — the README, not the keyword list, judges fit. No code change; metadata only. ([#130](https://github.com/awaithumans/awaithumans/pull/130))
+
+---
+
 ## [0.1.4] — 2026-05-17
 
 Eight PRs of bug fixes and DX improvements caught by beta-tester
