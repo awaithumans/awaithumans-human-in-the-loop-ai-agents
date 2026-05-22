@@ -7,6 +7,12 @@
     "light": "#33EE99",
     "dark": "#00B25A"
   },
+  "integrations": {
+    "posthog": {
+      "apiKey": "phc_xHxQxFVM5onEEhuhgR6TkGNnfgvBh9XcHLrtwh5GSWbx",
+      "apiHost": "https://us.i.posthog.com"
+    }
+  },
   "favicon": "/favicon.svg",
   "logo": {
     "light": "/logo/light.svg",
