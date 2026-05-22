@@ -19,6 +19,7 @@
 
 [![PyPI](https://img.shields.io/pypi/v/awaithumans?label=pypi&color=3775A9&logo=pypi&logoColor=white)](https://pypi.org/project/awaithumans/)
 [![npm](https://img.shields.io/npm/v/awaithumans?label=npm&color=CB3837&logo=npm&logoColor=white)](https://www.npmjs.com/package/awaithumans)
+[![CI](https://img.shields.io/github/actions/workflow/status/awaithumans/awaithumans/test.yml?label=tests&logo=github&logoColor=white)](https://github.com/awaithumans/awaithumans/actions/workflows/test.yml)
 [![License](https://img.shields.io/badge/license-Apache_2.0-blue)](https://github.com/awaithumans/awaithumans/blob/main/LICENSE)
 [![Python](https://img.shields.io/badge/python-3.10%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/downloads/)
 [![Discord](https://img.shields.io/badge/discord-join-5865F2?logo=discord&logoColor=white)](https://discord.gg/Kewdh7vjdc)
@@ -315,6 +316,24 @@ the entire extension surface.
 - **Full docs:** [docs.awaithumans.dev](https://docs.awaithumans.dev)
 - **Contributing:** [`CONTRIBUTING.md`](./CONTRIBUTING.md)
 - **Security policy:** [`SECURITY.md`](./SECURITY.md)
+
+---
+
+## Built with awaithumans?
+
+Drop this badge in your project's README so folks know where the HITL primitive came from:
+
+[![Powered by awaithumans](https://raw.githubusercontent.com/awaithumans/awaithumans/main/docs/images/badges/powered-by-awaithumans.svg)](https://github.com/awaithumans/awaithumans)
+
+```markdown
+[![Powered by awaithumans](https://raw.githubusercontent.com/awaithumans/awaithumans/main/docs/images/badges/powered-by-awaithumans.svg)](https://github.com/awaithumans/awaithumans)
+```
+
+Or generate a generic variant via [shields.io](https://shields.io):
+
+```markdown
+[![Powered by awaithumans](https://img.shields.io/badge/Powered_by-awaithumans-00E676)](https://github.com/awaithumans/awaithumans)
+```
 
 ---
 
