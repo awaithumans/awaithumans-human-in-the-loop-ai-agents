@@ -107,6 +107,7 @@ function LoginPageInner() {
 					<form onSubmit={handleSubmit} className="space-y-4">
 						<Field
 							label="Email"
+							placeholder="you@yourcompany.com"
 							type="email"
 							value={email}
 							onChange={setEmail}
@@ -115,6 +116,7 @@ function LoginPageInner() {
 						/>
 						<Field
 							label="Password"
+							placeholder="your operator password"
 							type="password"
 							value={password}
 							onChange={setPassword}
@@ -162,6 +164,7 @@ function LoginPageInner() {
 
 function Field({
 	label,
+	placeholder,
 	value,
 	onChange,
 	type = "text",
@@ -169,6 +172,7 @@ function Field({
 	disabled,
 }: {
 	label: string;
+	placeholder?: string;
 	value: string;
 	onChange: (v: string) => void;
 	type?: string;
@@ -184,9 +188,10 @@ function Field({
 				type={type}
 				value={value}
 				onChange={(e) => onChange(e.target.value)}
+				placeholder={placeholder}
 				autoFocus={autoFocus}
 				disabled={disabled}
-				className="w-full bg-white/5 border border-white/10 rounded-md px-3 py-2 text-sm focus:outline-none focus:border-brand/40 disabled:opacity-40"
+				className="w-full bg-white/5 border border-white/10 rounded-md px-3 py-2 text-sm placeholder:text-white/20 focus:outline-none focus:border-brand/40 disabled:opacity-40"
 			/>
 		</label>
 	);

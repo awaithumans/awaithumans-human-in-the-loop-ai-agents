@@ -52,6 +52,15 @@ function SetupPageInner() {
 		"checking" | "ready" | "already-done" | "created" | "unreachable"
 	>("checking");
 
+	// After a successful signup we want the OnboardingPanel to confirm
+	// exactly what was persisted — solves the "I forgot which email I
+	// just used" failure mode. Captured here at submit time so it
+	// survives any later state reset.
+	const [createdAs, setCreatedAs] = useState<{
+		email: string;
+		displayName: string | null;
+	} | null>(null);
+
 	useEffect(() => {
 		(async () => {
 			try {
@@ -88,6 +97,7 @@ function SetupPageInner() {
 				display_name: displayName || undefined,
 			});
 			// Server sets the session cookie on 201 — show onboarding step.
+			setCreatedAs({ email, displayName: displayName || null });
 			setState("created");
 		} catch (err) {
 			// Match on typed errors instead of string-sniffing status
@@ -152,7 +162,13 @@ function SetupPageInner() {
 	}
 
 	if (state === "created") {
-		return <OnboardingPanel onContinue={() => router.replace("/")} />;
+		return (
+			<OnboardingPanel
+				email={createdAs?.email ?? null}
+				displayName={createdAs?.displayName ?? null}
+				onContinue={() => router.replace("/")}
+			/>
+		);
 	}
 
 	return (
@@ -165,6 +181,7 @@ function SetupPageInner() {
 			<form onSubmit={handleSubmit} className="space-y-4">
 				<Field
 					label="Setup token"
+					placeholder="paste from server log"
 					value={token}
 					onChange={setToken}
 					disabled={submitting}
@@ -173,6 +190,7 @@ function SetupPageInner() {
 				/>
 				<Field
 					label="Email"
+					placeholder="you@yourcompany.com"
 					type="email"
 					value={email}
 					onChange={setEmail}
@@ -181,12 +199,14 @@ function SetupPageInner() {
 				/>
 				<Field
 					label="Display name (optional)"
+					placeholder="Alex Rivera"
 					value={displayName}
 					onChange={setDisplayName}
 					disabled={submitting}
 				/>
 				<Field
 					label="Password"
+					placeholder="at least 8 characters"
 					type="password"
 					value={password}
 					onChange={setPassword}
@@ -194,6 +214,7 @@ function SetupPageInner() {
 				/>
 				<Field
 					label="Confirm password"
+					placeholder="re-enter your password"
 					type="password"
 					value={confirm}
 					onChange={setConfirm}
@@ -220,7 +241,15 @@ function SetupPageInner() {
 
 // ─── Post-creation onboarding panel ─────────────────────────────────
 
-function OnboardingPanel({ onContinue }: { onContinue: () => void }) {
+function OnboardingPanel({
+	email,
+	displayName,
+	onContinue,
+}: {
+	email: string | null;
+	displayName: string | null;
+	onContinue: () => void;
+}) {
 	const [lang, setLang] = useState<Lang>("python");
 
 	return (
@@ -238,9 +267,23 @@ function OnboardingPanel({ onContinue }: { onContinue: () => void }) {
 						<span className="text-brand">✓</span>
 						<h1 className="text-lg font-semibold">Operator created</h1>
 					</div>
-					<p className="text-white/40 text-xs mb-6">
+					<p className="text-white/40 text-xs mb-4">
 						You're signed in. Try sending your first task from an agent.
 					</p>
+
+					{/* Echo the credentials the user just submitted so they
+					    can recover them later (or notice if a typo crept
+					    in). Solves the "what email did I sign up with?"
+					    confusion that bites people 5 minutes later. */}
+					{email && (
+						<div className="mb-6 border border-brand/20 bg-brand/5 rounded-md px-3 py-2 text-xs">
+							<div className="text-white/40 mb-0.5">Signed in as</div>
+							<div className="font-mono text-fg break-all">{email}</div>
+							{displayName && (
+								<div className="text-white/50 mt-1">{displayName}</div>
+							)}
+						</div>
+					)}
 
 					<LanguageTabs lang={lang} onChange={setLang} />
 
@@ -474,6 +517,7 @@ function Shell({ title, children }: { title: string; children: React.ReactNode }
 
 function Field({
 	label,
+	placeholder,
 	value,
 	onChange,
 	type = "text",
@@ -481,6 +525,7 @@ function Field({
 	disabled,
 }: {
 	label: string;
+	placeholder?: string;
 	value: string;
 	onChange: (v: string) => void;
 	type?: string;
@@ -496,9 +541,10 @@ function Field({
 				type={type}
 				value={value}
 				onChange={(e) => onChange(e.target.value)}
+				placeholder={placeholder}
 				autoFocus={autoFocus}
 				disabled={disabled}
-				className="w-full bg-white/5 border border-white/10 rounded-md px-3 py-2 text-sm focus:outline-none focus:border-brand/40 disabled:opacity-40"
+				className="w-full bg-white/5 border border-white/10 rounded-md px-3 py-2 text-sm placeholder:text-white/20 focus:outline-none focus:border-brand/40 disabled:opacity-40"
 			/>
 		</label>
 	);
