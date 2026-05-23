@@ -1,6 +1,6 @@
 {
   "name": "awaithumans",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "description": "HITL infrastructure for AI agents. Your agent calls awaitHuman(), a human reviews via Slack/email/dashboard, agent resumes with a typed response.",
   "type": "module",
   "sideEffects": false,

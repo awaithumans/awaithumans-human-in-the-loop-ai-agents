@@ -16,6 +16,23 @@ _Nothing yet — open the next change here._
 
 ---
 
+## [0.1.6] — 2026-05-23
+
+Three-fix release, all surfaced by real first-run-onboarding debugging on a fresh machine. No API changes — safe drop-in upgrade.
+
+### Fixed
+
+- **PyPI README's demo GIF is no longer a broken image.** v0.1.5's `hero-demo.gif` was 10.5 MB at 1402×720 / 33fps. PyPI's image proxy (Camo) rejects responses over ~5 MB, so the README rendered with a broken-image icon for every visitor. Re-encoded with ffmpeg's two-pass palette to 720px / 10fps / 64 colors → **3.24 MB** (69% smaller) while still showing the full demo flow. Render path: `cdn.jsdelivr.net/gh/awaithumans/awaithumans@v0.1.6/docs/images/hero-demo.gif`. ([#138](https://github.com/awaithumans/awaithumans/pull/138))
+- **First-run setup form: every input now has placeholder text.** Empty `<input>` boxes with just a small label gave new operators zero hint about the expected format. Watched a real user type an arbitrary placeholder-shaped string into the email field on `/setup`, succeed, then be unable to log in. Placeholders added on `/setup` (token, email, display name, password, confirm) and `/login` (email, password). Closes [#136](https://github.com/awaithumans/awaithumans/issues/136). ([#138](https://github.com/awaithumans/awaithumans/pull/138))
+- **Post-signup OnboardingPanel now echoes the email + display name you registered.** The "Operator created" screen previously jumped straight to SDK code examples without confirming what got persisted, so users had no way to recover the credentials they just typed. Adds a small brand-tinted "Signed in as" card above the code. Closes [#137](https://github.com/awaithumans/awaithumans/issues/137). ([#138](https://github.com/awaithumans/awaithumans/pull/138))
+
+### Maintenance
+
+- Python and TypeScript stay mono-versioned at `0.1.6`.
+- Docker image republished as `ghcr.io/awaithumans/awaithumans:v0.1.6` (also retagged `:latest`).
+
+---
+
 ## [0.1.5] — 2026-05-19
 
 Two days after [v0.1.4](https://github.com/awaithumans/awaithumans/releases/tag/v0.1.4). Maintenance + discovery release: one PyPI-rendering bug fix from beta-tester feedback, the test-CI infrastructure that was missing, follow-up cleanups CI surfaced on first run, and a deliberate npm-keyword expansion as a discovery experiment. No API changes; safe drop-in upgrade.
