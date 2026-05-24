@@ -75,8 +75,16 @@ def test_tampered_signature_rejected() -> None:
     """Flipping a character in the signature segment must raise InvalidEmbedTokenError."""
     token, _ = _sign_default()
     header, payload, sig = token.rsplit(".", 2)
-    # Corrupt the signature by changing the last character
-    bad_sig = sig[:-1] + ("A" if sig[-1] != "A" else "B")
+    # Flip a character near the START of the signature segment, not at
+    # the end. base64url's final character can carry up to 2 "unused"
+    # bits (HMAC-SHA256 = 256 bits encoded into 43 chars × 6 = 258
+    # bits, with 2 surplus bits in the trailing char). Flips that only
+    # change those surplus bits are no-ops on decode and the signature
+    # stays valid — the test went flaky across Python versions
+    # depending on what the last byte of the random HMAC happened to be.
+    # Interior characters are always load-bearing.
+    mid = len(sig) // 2
+    bad_sig = sig[:mid] + ("A" if sig[mid] != "A" else "B") + sig[mid + 1 :]
     forged = f"{header}.{payload}.{bad_sig}"
 
     with pytest.raises(InvalidEmbedTokenError):
