@@ -80,8 +80,16 @@ COPY --from=wheel-builder /src/packages/python/dist /tmp/dist
 # globs `[...]` as a character class — `*.whl[server]` would expand
 # to nothing. Resolve the wheel path first, then concat the extras.
 RUN WHEEL=$(ls /tmp/dist/*.whl | head -1) \
- && pip install --no-cache-dir "${WHEEL}[server]" \
+ && pip install --no-cache-dir \
+      "${WHEEL}[server,verifier-claude,verifier-openai,verifier-gemini,verifier-azure]" \
  && rm -rf /tmp/dist
+# Why all verifier extras? Without them, sending a verifier config to the
+# server fails with "Verifier provider 'X' requires the [verifier-X]
+# extra. Install with: pip install awaithumans[verifier-X]" — which the
+# user can't do because the server lives inside an image. Shipping all
+# four extras costs ~35 MB on top of the ~200 MB base. Users who care
+# about image size can build a custom image picking only the extras
+# they actually use. See #142.
 
 # Non-root runtime user. SQLite + any writes go to /var/lib/awaithumans.
 RUN useradd --system --uid 10001 --home-dir /var/lib/awaithumans awaithumans \
