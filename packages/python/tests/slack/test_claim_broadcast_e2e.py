@@ -46,11 +46,36 @@ from awaithumans.utils.constants import SLACK_ACTION_CLAIM_TASK
 SIGNING_SECRET = "test-signing-secret"
 
 
+class _UsersInfoResponse:
+    """Mirrors `slack_sdk.web.SlackResponse` enough for the auto-link
+    code path: a `.data` dict with a `user.profile.email`. Tests can
+    set `email` to `None` or raise via `users_info_error` to exercise
+    the no-email / API-error branches."""
+
+    def __init__(self, email: str | None) -> None:
+        self.data: dict[str, Any] = {
+            "ok": True,
+            "user": {"profile": {"email": email} if email is not None else {}},
+        }
+
+
 class FakeSlackClient:
     """Recorder. Implements every call the claim handler makes."""
 
     def __init__(self) -> None:
         self.calls: list[dict[str, Any]] = []
+        # Email returned from `users_info` — tests override to exercise
+        # the auto-link branches added in #144.
+        self.users_info_email: str | None = None
+        # Set to a `SlackApiError` to make `users_info` raise instead
+        # of returning a profile.
+        self.users_info_error: Exception | None = None
+
+    async def users_info(self, *, user: str) -> _UsersInfoResponse:
+        self.calls.append({"method": "users_info", "user": user})
+        if self.users_info_error is not None:
+            raise self.users_info_error
+        return _UsersInfoResponse(self.users_info_email)
 
     async def views_open(self, *, trigger_id: str, view: dict[str, Any]) -> dict[str, Any]:
         self.calls.append({"method": "views_open", "trigger_id": trigger_id, "view": view})

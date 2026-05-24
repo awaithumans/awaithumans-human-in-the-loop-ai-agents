@@ -15,7 +15,7 @@ import logging
 from datetime import datetime, timezone
 from typing import Any
 
-from sqlalchemy import delete, select
+from sqlalchemy import delete, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -127,6 +127,61 @@ async def get_user_by_slack(
         )
     )
     return result.scalar_one_or_none()
+
+
+async def link_slack_identity_by_email(
+    session: AsyncSession,
+    *,
+    email: str,
+    slack_team_id: str,
+    slack_user_id: str,
+) -> User | None:
+    """Bind a Slack identity to the directory user with this email.
+
+    Looks up the user by email. If found AND `slack_user_id` is unset
+    (or already matches the requested one), atomically writes
+    `slack_team_id` + `slack_user_id` and returns the updated row.
+    Returns None when no email match exists, or when the matched user
+    already has a different Slack identity bound (we never silently
+    hijack a binding).
+
+    Used by the Slack interactivity handler to auto-link an operator's
+    Slack identity on their first button click, instead of refusing
+    with "ask your operator to add you via Settings → Users". See #144.
+    """
+    user = await get_user_by_email(session, email)
+    if user is None:
+        return None
+
+    if user.slack_user_id and user.slack_user_id != slack_user_id:
+        # Already bound to a DIFFERENT Slack user — refuse silently
+        # rather than overwrite. Caller falls back to the old refusal
+        # path with a sharper hint.
+        return None
+
+    if (
+        user.slack_team_id == slack_team_id
+        and user.slack_user_id == slack_user_id
+    ):
+        return user
+
+    # Atomic conditional update — only patches the row when
+    # slack_user_id is still NULL (or matches). Two concurrent first-
+    # clicks for the same email race onto the same write; the second
+    # one is a no-op against an already-bound row, the row state ends
+    # up correct either way.
+    result = await session.execute(
+        update(User)
+        .where(
+            User.id == user.id,
+            (User.slack_user_id.is_(None)) | (User.slack_user_id == slack_user_id),
+        )
+        .values(slack_team_id=slack_team_id, slack_user_id=slack_user_id)
+        .returning(User)
+    )
+    await session.commit()
+    updated = result.scalar_one_or_none()
+    return updated
 
 
 async def list_users(
