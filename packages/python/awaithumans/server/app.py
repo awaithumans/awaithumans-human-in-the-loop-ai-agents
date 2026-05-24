@@ -27,6 +27,11 @@ from awaithumans.server.core.channel_config_validator import (
 from awaithumans.server.core.config import settings, unknown_env_keys
 from awaithumans.server.core.dashboard_static import DashboardStaticFiles
 from awaithumans.server.core.embed_auth import EmbedAuthMiddleware
+from awaithumans.server.core.encryption import (
+    EncryptionKeyError,
+    EncryptionNotConfiguredError,
+    get_key,
+)
 from awaithumans.server.core.exceptions import exception_handlers
 from awaithumans.server.core.logging_config import setup_logging
 from awaithumans.server.core.middleware import RequestIDMiddleware
@@ -101,6 +106,28 @@ class EmbedResponseHeadersMiddleware(BaseHTTPMiddleware):
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     """Startup and shutdown lifecycle."""
+    # Fail fast on a misconfigured PAYLOAD_KEY (bad length, bad base64,
+    # missing entirely). The key is needed for every signed-session
+    # cookie, but `get_key()` was only invoked lazily on the first
+    # request that needed it — which for new operators is the signup
+    # POST. The lazy failure surfaced as a generic
+    # 500 INTERNAL_ERROR with the helpful EncryptionKeyError message
+    # buried in server logs and the operator left with a half-created
+    # user row, no session, and no path forward (#140).
+    #
+    # Calling get_key() here surfaces the same error message at boot,
+    # before uvicorn accepts traffic — so the operator sees the
+    # remediation hint on the very first run, not after their first
+    # failed signup.
+    try:
+        get_key()
+    except (EncryptionKeyError, EncryptionNotConfiguredError) as exc:
+        logger.error(
+            "Refusing to start: AWAITHUMANS_PAYLOAD_KEY is misconfigured. %s",
+            exc,
+        )
+        raise
+
     await init_db()
     logger.info("Database initialized")
 
