@@ -16,6 +16,22 @@ _Nothing yet — open the next change here._
 
 ---
 
+## [0.1.7] — 2026-05-24
+
+Two-fix release, both surfaced by real first-time-user debugging on a fresh machine. No API surface changes — safe drop-in upgrade.
+
+### Fixed
+
+- **Docker image now ships all verifier extras.** v0.1.6's published image only included `[server]`, so the moment a user sent a task with `VerifierConfig(provider="claude" | "openai" | "gemini" | "azure_openai")` to the official image, the server failed on response submission with *"Verifier provider 'X' requires the [verifier-X] extra. Install with: pip install awaithumans[verifier-X]"* — which the operator couldn't act on because the server lived inside an image. The `await_human()` call never resolved; the agent hung until timeout. Image now installs all four verifier extras (~35 MB added). Closes [#142](https://github.com/awaithumans/awaithumans/issues/142). ([#143](https://github.com/awaithumans/awaithumans/pull/143))
+- **Slack interactivity auto-links a Slack identity to your operator account on first click.** Previously, clicking `Open in Slack` or `Claim` on a task message refused with *"You're not in this server's user directory. Ask your operator to add you via Settings → Users."* — even when the clicker WAS the operator who installed the Slack app and signed up via `/setup`. Recovery required digging up two Slack IDs and pasting them into the dashboard's user-edit form. Now the server calls Slack's `users.info` API for the clicker's email and atomically binds the Slack identity to a matching directory user. Requires the Slack app's bot token to have the `users:read.email` scope. Closes [#144](https://github.com/awaithumans/awaithumans/issues/144). ([#145](https://github.com/awaithumans/awaithumans/pull/145))
+
+### Maintenance
+
+- Python and TypeScript stay mono-versioned at `0.1.7`.
+- Docker image republished as `ghcr.io/awaithumans/awaithumans:v0.1.7` (also retagged `:latest`).
+
+---
+
 ## [0.1.6] — 2026-05-23
 
 Three-fix release, all surfaced by real first-run-onboarding debugging on a fresh machine. No API changes — safe drop-in upgrade.
