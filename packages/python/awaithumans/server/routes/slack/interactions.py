@@ -57,7 +57,11 @@ from awaithumans.server.services.task_service import (
     complete_task,
     get_task,
 )
-from awaithumans.server.services.user_service import get_user, get_user_by_slack
+from awaithumans.server.services.user_service import (
+    get_user,
+    get_user_by_slack,
+    link_slack_identity_by_email,
+)
 from awaithumans.utils.constants import (
     SLACK_ACTION_CLAIM_TASK,
     SLACK_ACTION_OPEN_REVIEW,
@@ -180,6 +184,93 @@ async def _handle_block_actions(
     )
 
 
+async def _resolve_slack_user_with_auto_link(
+    *,
+    session: AsyncSession,
+    team_id: str,
+    slack_user_id: str,
+) -> tuple[Any | None, str | None]:
+    """Look up the directory user for a Slack identity, with auto-link fallback.
+
+    Path 1 (fast): direct (team_id, slack_user_id) hit. Returns the user.
+
+    Path 2 (auto-link, first click only): if no direct hit, call
+    Slack's users.info API for the clicker's email and atomically bind
+    it to a matching directory user (where slack_user_id IS NULL).
+    Subsequent clicks hit path 1.
+
+    Path 3 (refuse): no email exposed by Slack (missing
+    ``users:read.email`` scope), or no directory user matches, or the
+    match already has a different Slack identity bound. Returns
+    ``(None, fallback_error_text)`` so the caller posts an ephemeral
+    refusal with the right hint.
+
+    See #144.
+    """
+    direct = await get_user_by_slack(
+        session, slack_team_id=team_id, slack_user_id=slack_user_id
+    )
+    if direct is not None and direct.active:
+        return direct, None
+
+    client = await get_client_for_team(session, team_id)
+    if client is None:
+        return None, (
+            "You're not in this server's user directory. Ask your "
+            "operator to add you via Settings → Users."
+        )
+
+    try:
+        info = await client.users_info(user=slack_user_id)
+    except SlackApiError as exc:
+        logger.warning(
+            "auto-link: users_info failed for %s/%s: %s",
+            team_id,
+            slack_user_id,
+            exc.response.get("error", "unknown"),
+        )
+        return None, (
+            "You're not in this server's user directory. Ask your "
+            "operator to add you via Settings → Users."
+        )
+
+    profile = (info.data.get("user") or {}).get("profile") or {}
+    email = profile.get("email")
+    if not email:
+        return None, (
+            "You're not in this server's user directory. The Slack "
+            "app couldn't read your email (the `users:read.email` "
+            "scope may be missing) so auto-linking isn't possible — "
+            "ask your operator to add you via Settings → Users."
+        )
+
+    linked = await link_slack_identity_by_email(
+        session,
+        email=email,
+        slack_team_id=team_id,
+        slack_user_id=slack_user_id,
+    )
+    if linked is None:
+        return None, (
+            f"You're not in this server's user directory. Your Slack "
+            f"email ({email}) doesn't match any registered operator. "
+            "Ask your operator to add you via Settings → Users."
+        )
+    if not linked.active:
+        return None, (
+            "Your operator account is deactivated. Ask your operator "
+            "to re-activate it via Settings → Users."
+        )
+
+    logger.info(
+        "slack_identity_linked user=%s team=%s slack_user=%s via=first_click",
+        linked.id,
+        team_id,
+        slack_user_id,
+    )
+    return linked, None
+
+
 async def _slack_user_can_act_on_task(
     *,
     session: AsyncSession,
@@ -196,22 +287,18 @@ async def _slack_user_can_act_on_task(
       - they're either the task's assignee, OR an operator.
 
     Anyone else gets blocked with a human-readable reason so the
-    ephemeral reply tells them why. Resolving (team_id, slack_user_id)
-    to a directory user is the same lookup the claim path already does
-    — keeps the audit trail consistent (`completed_by_email` becomes
-    the directory email, not whatever Slack happened to put in
-    `user.username`)."""
+    ephemeral reply tells them why. The resolver auto-links a Slack
+    identity to a matching directory user by email on first click,
+    avoiding the "ask your operator to add you" wall (#144).
+    """
     if not team_id or not slack_user_id:
         return False, "Missing Slack identity in the interaction payload."
 
-    directory_user = await get_user_by_slack(
-        session, slack_team_id=team_id, slack_user_id=slack_user_id
+    directory_user, error_text = await _resolve_slack_user_with_auto_link(
+        session=session, team_id=team_id, slack_user_id=slack_user_id
     )
-    if directory_user is None or not directory_user.active:
-        return False, (
-            "You're not in this server's user directory. Ask your "
-            "operator to add you via Settings → Users."
-        )
+    if directory_user is None:
+        return False, error_text or "Authorisation check failed."
 
     if directory_user.is_operator:
         return True, ""
@@ -311,20 +398,16 @@ async def _handle_claim(
         logger.error("claim: no client for team_id=%s", team_id)
         return
 
-    directory_user = await get_user_by_slack(
-        session, slack_team_id=team_id, slack_user_id=slack_user_id
+    directory_user, error_text = await _resolve_slack_user_with_auto_link(
+        session=session, team_id=team_id, slack_user_id=slack_user_id
     )
-    if directory_user is None or not directory_user.active:
+    if directory_user is None:
         await _ephemeral_reply(
             client=client,
             channel=channel,
             user_id=slack_user_id,
             response_url=response_url,
-            text=(
-                "You're not in this server's user directory. "
-                "Ask your operator to add you via Settings → Users, "
-                "then try claiming again."
-            ),
+            text=error_text or "Authorisation check failed.",
         )
         return
 
