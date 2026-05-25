@@ -2,7 +2,12 @@
 
 from __future__ import annotations
 
+import os
+from pathlib import Path
+
 import typer
+from rich.console import Console
+from rich.text import Text
 
 from awaithumans.server.core.config import settings
 from awaithumans.server.core.encryption import (
@@ -11,11 +16,18 @@ from awaithumans.server.core.encryption import (
     get_key,
     reset_key_cache,
 )
+from awaithumans.utils.constants import DISCOVERY_FILE_NAME
+
+console = Console()
 
 
-def _fmt(status: str, message: str) -> str:
+def _print_result(status: str, message: str) -> None:
+    color = {"pass": "green", "warn": "yellow", "fail": "red"}[status]
     icon = {"pass": "✓", "warn": "⚠", "fail": "✗"}[status]
-    return f"{icon} {message}"
+    text = Text()
+    text.append(f"{icon} ", style=f"bold {color}")
+    text.append(message)
+    console.print(text)
 
 
 def _check_payload_key() -> tuple[str, str]:
@@ -23,9 +35,16 @@ def _check_payload_key() -> tuple[str, str]:
     try:
         key = get_key()
         raw = settings.PAYLOAD_KEY or ""
-        return ("pass", f"AWAITHUMANS_PAYLOAD_KEY set ({len(raw)} chars, decodes to {len(key)} bytes)")
+        return (
+            "pass",
+            f"AWAITHUMANS_PAYLOAD_KEY set ({len(raw)} chars, decodes to {len(key)} bytes)",
+        )
     except EncryptionNotConfiguredError:
-        return ("fail", "AWAITHUMANS_PAYLOAD_KEY not set — generate with: python -c 'import secrets; print(secrets.token_urlsafe(32))'")
+        return (
+            "fail",
+            "AWAITHUMANS_PAYLOAD_KEY not set — generate with:"
+            " python -c 'import secrets; print(secrets.token_urlsafe(32))'",
+        )
     except EncryptionKeyError as e:
         return ("fail", f"AWAITHUMANS_PAYLOAD_KEY invalid: {e}")
 
@@ -37,8 +56,6 @@ def _check_admin_api_token() -> tuple[str, str]:
 
 
 def _check_database() -> tuple[str, str]:
-    from pathlib import Path
-
     url = settings.database_url_sync
     if "sqlite" in url:
         path_str = url.split("sqlite:///")[-1]
@@ -52,14 +69,18 @@ def _check_database() -> tuple[str, str]:
         except OSError as e:
             return ("fail", f"Database directory not writable: {e}")
     else:
+        # sqlalchemy kept inline — only needed on the postgres path
         try:
             import sqlalchemy as sa
+
             engine = sa.create_engine(url, connect_args={"connect_timeout": 5})
             with engine.connect():
                 pass
             return ("pass", "Database connection successful")
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             return ("fail", f"DATABASE_URL unreachable: {e}")
+
+
 def _check_slack_token_shape() -> tuple[str, str]:
     token = settings.SLACK_BOT_TOKEN
     if not token:
@@ -73,7 +94,12 @@ def _check_slack_pairing() -> tuple[str, str]:
     has_token = bool(settings.SLACK_BOT_TOKEN)
     has_secret = bool(settings.SLACK_SIGNING_SECRET)
     if has_token == has_secret:
-        return ("pass", "Slack: token + signing secret both set" if has_token else "Slack: token + signing secret both unset (skipping)")
+        msg = (
+            "Slack: token + signing secret both set"
+            if has_token
+            else "Slack: token + signing secret both unset (skipping)"
+        )
+        return ("pass", msg)
     missing = "SLACK_SIGNING_SECRET" if has_token else "SLACK_BOT_TOKEN"
     return ("warn", f"Slack: {missing} is missing — set both or neither")
 
@@ -83,8 +109,30 @@ def _check_slack_public_url() -> tuple[str, str]:
     if not slack_configured:
         return ("pass", "Slack: not configured (skipping PUBLIC_URL check)")
     if "localhost" in settings.PUBLIC_URL or "127.0.0.1" in settings.PUBLIC_URL:
-        return ("warn", f"Slack: PUBLIC_URL is {settings.PUBLIC_URL} — Slack interactivity buttons won't work from Slack's cloud. Use ngrok or Cloudflare Tunnel, or enable Socket Mode.")
+        return (
+            "warn",
+            f"Slack: PUBLIC_URL is {settings.PUBLIC_URL} — Slack interactivity buttons won't"
+            " work from Slack's cloud. Use ngrok or Cloudflare Tunnel, or enable Socket Mode.",
+        )
     return ("pass", f"Slack: PUBLIC_URL is {settings.PUBLIC_URL}")
+
+
+def _check_discovery_file() -> tuple[str, str]:
+    path = Path.home() / DISCOVERY_FILE_NAME
+    if not path.exists():
+        return (
+            "pass",
+            f"Discovery file {path} not found (will be created on first `awaithumans dev`)",
+        )
+    if path.is_dir():
+        return (
+            "fail",
+            f"Discovery file {path} is a directory — Docker bind-mount gotcha."
+            f" Remove it: rm -rf {path}",
+        )
+    if not os.access(path, os.W_OK):
+        return ("fail", f"Discovery file {path} exists but is not writable")
+    return ("pass", f"Discovery file at {path} is writable")
 
 
 def doctor() -> None:
@@ -100,16 +148,17 @@ def doctor() -> None:
         _check_slack_token_shape,
         _check_slack_pairing,
         _check_slack_public_url,
+        _check_discovery_file,
     ]
     results = [check() for check in checks]
 
     for status, message in results:
-        typer.echo(_fmt(status, message))
+        _print_result(status, message)
 
-    typer.echo()
     passed = sum(1 for s, _ in results if s == "pass")
-    warned  = sum(1 for s, _ in results if s == "warn")
-    failed  = sum(1 for s, _ in results if s == "fail")
+    warned = sum(1 for s, _ in results if s == "warn")
+    failed = sum(1 for s, _ in results if s == "fail")
+    typer.echo()
     typer.echo(f"{passed} checks passed, {warned} warnings, {failed} errors.")
     typer.echo()
 
