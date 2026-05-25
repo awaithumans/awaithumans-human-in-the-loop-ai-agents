@@ -60,6 +60,31 @@ def _check_database() -> tuple[str, str]:
             return ("pass", "Database connection successful")
         except Exception as e:
             return ("fail", f"DATABASE_URL unreachable: {e}")
+def _check_slack_token_shape() -> tuple[str, str]:
+    token = settings.SLACK_BOT_TOKEN
+    if not token:
+        return ("pass", "Slack: SLACK_BOT_TOKEN not configured (skipping)")
+    if not token.startswith("xoxb-"):
+        return ("warn", "Slack: SLACK_BOT_TOKEN looks malformed — expected to start with 'xoxb-'")
+    return ("pass", "Slack: SLACK_BOT_TOKEN shape looks correct")
+
+
+def _check_slack_pairing() -> tuple[str, str]:
+    has_token = bool(settings.SLACK_BOT_TOKEN)
+    has_secret = bool(settings.SLACK_SIGNING_SECRET)
+    if has_token == has_secret:
+        return ("pass", "Slack: token + signing secret both set" if has_token else "Slack: token + signing secret both unset (skipping)")
+    missing = "SLACK_SIGNING_SECRET" if has_token else "SLACK_BOT_TOKEN"
+    return ("warn", f"Slack: {missing} is missing — set both or neither")
+
+
+def _check_slack_public_url() -> tuple[str, str]:
+    slack_configured = bool(settings.SLACK_BOT_TOKEN or settings.SLACK_SIGNING_SECRET)
+    if not slack_configured:
+        return ("pass", "Slack: not configured (skipping PUBLIC_URL check)")
+    if "localhost" in settings.PUBLIC_URL or "127.0.0.1" in settings.PUBLIC_URL:
+        return ("warn", f"Slack: PUBLIC_URL is {settings.PUBLIC_URL} — Slack interactivity buttons won't work from Slack's cloud. Use ngrok or Cloudflare Tunnel, or enable Socket Mode.")
+    return ("pass", f"Slack: PUBLIC_URL is {settings.PUBLIC_URL}")
 
 
 def doctor() -> None:
@@ -68,7 +93,14 @@ def doctor() -> None:
     typer.echo("─" * 45)
     typer.echo()
 
-    checks = [_check_payload_key, _check_admin_api_token, _check_database]
+    checks = [
+        _check_payload_key,
+        _check_admin_api_token,
+        _check_database,
+        _check_slack_token_shape,
+        _check_slack_pairing,
+        _check_slack_public_url,
+    ]
     results = [check() for check in checks]
 
     for status, message in results:
