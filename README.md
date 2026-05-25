@@ -382,8 +382,19 @@ For the post-launch roadmap — local task book for runtimes without an orchestr
 
 ## Contributors
 
-awaithumans is built by the maintainers and these contributors:
+awaithumans is built by the maintainers and these brilliant community contributors.
 
-- [@HirenGajjar](https://github.com/HirenGajjar) — `awaithumans doctor` pre-flight checks ([#150](https://github.com/awaithumans/awaithumans/pull/150))
+<table>
+<tr>
+<td align="center" width="200">
+  <a href="https://github.com/HirenGajjar">
+    <img src="https://github.com/HirenGajjar.png?size=180" width="180" height="180" alt="Hiren Gajjar" style="border-radius: 50%;" /><br>
+    <b>Hiren Gajjar</b>
+  </a><br>
+  <sub><code>awaithumans doctor</code></sub><br>
+  <sub><a href="https://github.com/awaithumans/awaithumans/pull/150">#150</a></sub>
+</td>
+</tr>
+</table>
 
-Want to be on this list? Pick a [`good first issue`](https://github.com/awaithumans/awaithumans/labels/good%20first%20issue), drop a comment on it to claim, and we'll review your PR within ~24h.
+Want to be on this list? Pick a [`good first issue`](https://github.com/awaithumans/awaithumans/labels/good%20first%20issue), drop a comment on it to claim, and we'll review your PR within ~24h. As we grow, this gallery shrinks each avatar back down to a tight grid — same shape, more faces.
