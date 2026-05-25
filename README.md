@@ -337,6 +337,21 @@ Or generate a generic variant via [shields.io](https://shields.io):
 
 ---
 
+## Troubleshooting
+
+If something isn't working, run the pre-flight check first:
+
+```bash
+awaithumans doctor
+```
+
+It scans your environment for the most common misconfigurations —
+missing or malformed `PAYLOAD_KEY`, Slack token issues, unreachable
+database, Docker bind-mount gotchas — and prints a clear report with
+actionable fixes. Catches ~80% of first-run issues in under 2 seconds.
+
+---
+
 ## Packages
 
 | Package | Registry | License |
