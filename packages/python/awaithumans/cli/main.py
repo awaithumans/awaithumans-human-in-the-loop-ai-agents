@@ -11,7 +11,7 @@ except ImportError:
     # `utils.constants` lives in the base SDK (httpx + pydantic only) —
     # importing it here is safe even when the [server] extras are missing.
     from awaithumans.utils.constants import DOCS_TROUBLESHOOTING_URL
-
+    from awaithumans.cli.commands.doctor import doctor
     raise SystemExit(
         "awaithumans CLI: server extras not installed.\n"
         "\n"
@@ -35,6 +35,7 @@ from awaithumans.cli.commands.remove_user import remove_user
 from awaithumans.cli.commands.revoke_service_key import revoke_service_key
 from awaithumans.cli.commands.set_password import set_password_cmd
 from awaithumans.cli.commands.version import version
+from awaithumans.cli.commands.doctor import doctor
 
 app = typer.Typer(
     name="awaithumans",
@@ -52,6 +53,6 @@ app.command("create-service-key")(create_service_key)
 app.command("list-service-keys")(list_service_keys)
 app.command("revoke-service-key")(revoke_service_key)
 app.command()(version)
-
+app.command()(doctor)
 if __name__ == "__main__":
     app()
