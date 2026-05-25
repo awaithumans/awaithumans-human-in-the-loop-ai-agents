@@ -164,3 +164,6 @@ def doctor() -> None:
 
     if failed:
         raise typer.Exit(code=1)
+
+    typer.echo("Run `awaithumans dev` when ready.")
+    typer.echo()
