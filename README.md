@@ -86,17 +86,17 @@ per project.
 
 ## Why awaithumans
 
-|                               | **awaithumans**                                                                                                                                                                                                                             | humanlayer           | DIY glue code       |
-| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------- | ------------------- |
-| **Maintained**          | ✅ Active development                                                                                                                                                                                                                             | ❌ Abandoned         | —                  |
-| **Setup time**          | One command (`awaithumans dev`)                                                                                                                                                                                                                 | Per-customer rebuild | Weeks               |
-| **Channels**            | Slack + email + built-in dashboard                                                                                                                                                                                                                | Slack only           | Build each yourself |
-| **Typed responses**     | ✅[Pydantic](https://pydantic.dev) (Python) / [Zod](https://zod.dev) (TS) — schema-validated end to end                                                                                                                                                | Partial              | Build each yourself |
-| **Restart-safe**        | ✅ Stripe-style idempotency — agent resumes across restarts                                                                                                                                                                                      | ❌                   | Build each yourself |
-| **AI pre-verification** | ✅[Claude](https://www.anthropic.com/claude) / [OpenAI](https://openai.com) / [Gemini](https://gemini.google.com) / [Azure](https://azure.microsoft.com/en-us/products/ai-services/openai-service) — pre-check the human's answer before the agent trusts it | ❌                   | Build each yourself |
-| **Workflow engines**    | ✅[Temporal](https://temporal.io) + [LangGraph](https://langchain-ai.github.io/langgraph/) adapters — hand the wait to the engine                                                                                                                      | ❌                   | Build each yourself |
-| **Self-hostable**       | ✅ Docker + Postgres in one command                                                                                                                                                                                                               | SaaS-only            | —                  |
-| **License**             | Apache 2.0 (patent grant)                                                                                                                                                                                                                         | —                   | —                  |
+|  | **awaithumans** | humanlayer | DIY glue code |
+|---|---|---|---|
+| **Maintained** | ✅ Active development | ❌ Abandoned | — |
+| **Setup time** | One command (`awaithumans dev`) | Per-customer rebuild | Weeks |
+| **Channels** | Slack + email + built-in dashboard | Slack only | Build each yourself |
+| **Typed responses** | ✅ [Pydantic](https://pydantic.dev) (Python) / [Zod](https://zod.dev) (TS) — schema-validated end to end | Partial | Build each yourself |
+| **Restart-safe** | ✅ Stripe-style idempotency — agent resumes across restarts | ❌ | Build each yourself |
+| **AI pre-verification** | ✅ [Claude](https://www.anthropic.com/claude) / [OpenAI](https://openai.com) / [Gemini](https://gemini.google.com) / [Azure](https://azure.microsoft.com/en-us/products/ai-services/openai-service) — pre-check the human's answer before the agent trusts it | ❌ | Build each yourself |
+| **Workflow engines** | ✅ [Temporal](https://temporal.io) + [LangGraph](https://langchain-ai.github.io/langgraph/) adapters — hand the wait to the engine | ❌ | Build each yourself |
+| **Self-hostable** | ✅ Docker + Postgres in one command | SaaS-only | — |
+| **License** | Apache 2.0 (patent grant) | — | — |
 
 Built by engineers who hit the HITL wall three times in production fintech and ScaleBrick agent systems — and watched the only OSS alternative get abandoned by its founder over per-customer-fork creep. The architecture has exactly four extension points (channels, verifiers, routers, task-type handlers) so no single customer can push the core into the same trap.
 
@@ -274,7 +274,8 @@ const decision = await awaitHuman({
 
 Full walkthrough: [`examples/quickstart-ts/`](./examples/quickstart-ts/).
 
-The server + dashboard are Python — TypeScript runs `npx awaithumans dev` (via [uv](https://astral.sh/uv)) so you never touch a Python env.
+The server + dashboard are Python — TypeScript runs `npx awaithumans
+dev` (via [uv](https://astral.sh/uv)) so you never touch a Python env.
 
 ---
 
@@ -336,24 +337,6 @@ Or generate a generic variant via [shields.io](https://shields.io):
 
 ---
 
-## Packages
-
-| Package                                                 | Registry | License    |
-| ------------------------------------------------------- | -------- | ---------- |
-| `awaithumans` (Python SDK + server + CLI + dashboard) | PyPI     | Apache 2.0 |
-| `awaithumans` (TypeScript SDK)                        | npm      | Apache 2.0 |
-| `ghcr.io/awaithumans/awaithumans` (container)         | GHCR     | Apache 2.0 |
-
-**License:** [Apache License 2.0](LICENSE). Permissive, OSI-approved,
-with an explicit patent grant. Use it in proprietary stacks, fork it,
-ship it inside paid products — no fee, no contact required. The only
-thing the license asks is that you preserve the notice and don't use
-the project's trademarks without permission.
-
----
-
-
-
 ## Troubleshooting
 
 If something isn't working, run the pre-flight check first:
@@ -365,12 +348,25 @@ awaithumans doctor
 It scans your environment for the most common misconfigurations —
 missing or malformed `PAYLOAD_KEY`, Slack token issues, unreachable
 database, Docker bind-mount gotchas — and prints a clear report with
-actionable fixes. This catches ~80% of first-run issues in under
-2 seconds.
+actionable fixes. Catches ~80% of first-run issues in under 2 seconds.
 
 ---
 
+## Packages
 
+| Package | Registry | License |
+|---|---|---|
+| `awaithumans` (Python SDK + server + CLI + dashboard) | PyPI | Apache 2.0 |
+| `awaithumans` (TypeScript SDK) | npm | Apache 2.0 |
+| `ghcr.io/awaithumans/awaithumans` (container) | GHCR | Apache 2.0 |
+
+**License:** [Apache License 2.0](LICENSE). Permissive, OSI-approved,
+with an explicit patent grant. Use it in proprietary stacks, fork it,
+ship it inside paid products — no fee, no contact required. The only
+thing the license asks is that you preserve the notice and don't use
+the project's trademarks without permission.
+
+---
 
 ## Status
 
@@ -380,4 +376,4 @@ The full primitive, all three channels (dashboard / Slack / email), both durable
 
 This is a young project — APIs are stable for v0.x, but expect rough edges in the long tail. File issues, open PRs, drop questions in [Discussions](https://github.com/awaithumans/awaithumans/discussions) or [Discord](https://discord.gg/Kewdh7vjdc). Every reproducible bug report shipped with a fix in v0.2.
 
-For the post-launch roadmap — local task book for runtimes without an orchestrator, custom router strategies, post-launch hardening — see [Roadmap &amp; help wanted](https://docs.awaithumans.dev/community/roadmap).
+For the post-launch roadmap — local task book for runtimes without an orchestrator, custom router strategies, post-launch hardening — see [Roadmap & help wanted](https://docs.awaithumans.dev/community/roadmap).
