@@ -377,3 +377,13 @@ The full primitive, all three channels (dashboard / Slack / email), both durable
 This is a young project — APIs are stable for v0.x, but expect rough edges in the long tail. File issues, open PRs, drop questions in [Discussions](https://github.com/awaithumans/awaithumans/discussions) or [Discord](https://discord.gg/Kewdh7vjdc). Every reproducible bug report shipped with a fix in v0.2.
 
 For the post-launch roadmap — local task book for runtimes without an orchestrator, custom router strategies, post-launch hardening — see [Roadmap & help wanted](https://docs.awaithumans.dev/community/roadmap).
+
+---
+
+## Contributors
+
+awaithumans is built by the maintainers and these contributors:
+
+- [@HirenGajjar](https://github.com/HirenGajjar) — `awaithumans doctor` pre-flight checks ([#150](https://github.com/awaithumans/awaithumans/pull/150))
+
+Want to be on this list? Pick a [`good first issue`](https://github.com/awaithumans/awaithumans/labels/good%20first%20issue), drop a comment on it to claim, and we'll review your PR within ~24h.
