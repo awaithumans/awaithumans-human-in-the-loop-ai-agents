@@ -1,6 +1,6 @@
 {
   "name": "awaithumans",
-  "version": "0.1.7",
+  "version": "0.1.8",
   "description": "HITL infrastructure for AI agents. Your agent calls awaitHuman(), a human reviews via Slack/email/dashboard, agent resumes with a typed response.",
   "type": "module",
   "sideEffects": false,
@@ -58,7 +58,8 @@
   },
   "overrides": {
     "langsmith": ">=0.6.0",
-    "protobufjs": "^7.5.8"
+    "protobufjs": "^7.5.8",
+    "uuid": "^11.1.1"
   },
   "license": "Apache-2.0",
   "repository": {
