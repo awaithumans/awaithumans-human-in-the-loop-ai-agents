@@ -2,7 +2,7 @@
 
 <div align="center">
 
-<img alt="awaithumans" src="https://cdn.jsdelivr.net/gh/awaithumans/awaithumans@main/docs/logo/light.svg" width="520">
+<img alt="awaithumans" src="https://cdn.jsdelivr.net/gh/awaithumans/awaithumans-human-in-the-loop-ai-agents@main/docs/logo/light.svg" width="520">
 
 <br>
 
@@ -11,14 +11,14 @@
 <br>
 
 [![PyPI installs](https://img.shields.io/pepy/dt/awaithumans?style=for-the-badge&label=PyPI%20installs&color=3775A9&logo=pypi&logoColor=white)](https://pepy.tech/project/awaithumans)
-[![GitHub stars](https://img.shields.io/github/stars/awaithumans/awaithumans?style=for-the-badge&color=FBBF24&logo=github&logoColor=white&label=GitHub%20stars)](https://github.com/awaithumans/awaithumans)
+[![GitHub stars](https://img.shields.io/github/stars/awaithumans/awaithumans-human-in-the-loop-ai-agents?style=for-the-badge&color=FBBF24&logo=github&logoColor=white&label=GitHub%20stars)](https://github.com/awaithumans/awaithumans-human-in-the-loop-ai-agents)
 
 [![PyPI](https://img.shields.io/pypi/v/awaithumans?label=pypi&color=3775A9&logo=pypi&logoColor=white)](https://pypi.org/project/awaithumans/)
 [![Python](https://img.shields.io/badge/python-3.10%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/downloads/)
-[![License](https://img.shields.io/badge/license-Apache_2.0-blue)](https://github.com/awaithumans/awaithumans/blob/main/LICENSE)
+[![License](https://img.shields.io/badge/license-Apache_2.0-blue)](https://github.com/awaithumans/awaithumans-human-in-the-loop-ai-agents/blob/main/LICENSE)
 [![Discord](https://img.shields.io/badge/discord-join-5865F2?logo=discord&logoColor=white)](https://discord.gg/Kewdh7vjdc)
 
-[**Docs**](https://docs.awaithumans.dev) · [**Quickstart**](https://docs.awaithumans.dev/quickstart) · [**Examples**](https://github.com/awaithumans/awaithumans/tree/main/examples) · [**Discord**](https://discord.gg/Kewdh7vjdc)
+[**Docs**](https://docs.awaithumans.dev) · [**Quickstart**](https://docs.awaithumans.dev/quickstart) · [**Examples**](https://github.com/awaithumans/awaithumans-human-in-the-loop-ai-agents/tree/main/examples) · [**Discord**](https://discord.gg/Kewdh7vjdc)
 
 </div>
 
@@ -46,9 +46,9 @@ if decision.approved:
     process_refund(...)
 ```
 
-![awaithumans demo — an agent creates a task, a human reviews it, the agent resumes with the typed response](https://cdn.jsdelivr.net/gh/awaithumans/awaithumans@main/docs/images/hero-demo.gif)
+![awaithumans demo — an agent creates a task, a human reviews it, the agent resumes with the typed response](https://cdn.jsdelivr.net/gh/awaithumans/awaithumans-human-in-the-loop-ai-agents@main/docs/images/hero-demo.gif)
 
-![The awaithumans dashboard — pending tasks queued for human review](https://cdn.jsdelivr.net/gh/awaithumans/awaithumans@main/docs/images/hero-dashboard.png)
+![The awaithumans dashboard — pending tasks queued for human review](https://cdn.jsdelivr.net/gh/awaithumans/awaithumans-human-in-the-loop-ai-agents@main/docs/images/hero-dashboard.png)
 
 ---
 
@@ -147,7 +147,7 @@ Slack channel broadcasts post a "Claim this task" button; first
 clicker atomically wins. Direct messages and emails go straight to
 the recipient.
 
-![Slack broadcast — a task posted to a channel with a Claim button](https://cdn.jsdelivr.net/gh/awaithumans/awaithumans@main/docs/images/slack-broadcast.png)
+![Slack broadcast — a task posted to a channel with a Claim button](https://cdn.jsdelivr.net/gh/awaithumans/awaithumans-human-in-the-loop-ai-agents@main/docs/images/slack-broadcast.png)
 
 ---
 
@@ -185,16 +185,16 @@ human with the reason attached. [Claude](https://www.anthropic.com/claude), [Ope
 
 ## Documentation
 
-- **Repository:** [github.com/awaithumans/awaithumans](https://github.com/awaithumans/awaithumans)
+- **Repository:** [github.com/awaithumans/awaithumans-human-in-the-loop-ai-agents](https://github.com/awaithumans/awaithumans-human-in-the-loop-ai-agents)
 - **Full docs:** [awaithumans.dev](https://awaithumans.dev)
-- **Examples:** [`examples/quickstart/`](https://github.com/awaithumans/awaithumans/tree/main/examples/quickstart) and [`examples/quickstart-ts/`](https://github.com/awaithumans/awaithumans/tree/main/examples/quickstart-ts)
-- **Changelog:** [`CHANGELOG.md`](https://github.com/awaithumans/awaithumans/blob/main/CHANGELOG.md)
+- **Examples:** [`examples/quickstart/`](https://github.com/awaithumans/awaithumans-human-in-the-loop-ai-agents/tree/main/examples/quickstart) and [`examples/quickstart-ts/`](https://github.com/awaithumans/awaithumans-human-in-the-loop-ai-agents/tree/main/examples/quickstart-ts)
+- **Changelog:** [`CHANGELOG.md`](https://github.com/awaithumans/awaithumans-human-in-the-loop-ai-agents/blob/main/CHANGELOG.md)
 
 ---
 
 ## License
 
-[Apache License 2.0](https://github.com/awaithumans/awaithumans/blob/main/LICENSE)
+[Apache License 2.0](https://github.com/awaithumans/awaithumans-human-in-the-loop-ai-agents/blob/main/LICENSE)
 across the whole package — SDK, server, dashboard, adapters, channels.
 Permissive, OSI-approved, with an explicit patent grant. Use it in
 proprietary stacks, fork it, ship it inside paid products.

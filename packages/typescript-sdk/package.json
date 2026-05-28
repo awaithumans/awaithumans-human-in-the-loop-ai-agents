@@ -64,7 +64,7 @@
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
-    "url": "https://github.com/awaithumans/awaithumans",
+    "url": "https://github.com/awaithumans/awaithumans-human-in-the-loop-ai-agents",
     "directory": "packages/typescript-sdk"
   },
   "keywords": [

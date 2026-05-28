@@ -115,7 +115,7 @@
       "anchors": [
         {
           "anchor": "GitHub",
-          "href": "https://github.com/awaithumans/awaithumans",
+          "href": "https://github.com/awaithumans/awaithumans-human-in-the-loop-ai-agents",
           "icon": "github"
         },
         {
@@ -125,7 +125,7 @@
         },
         {
           "anchor": "Releases",
-          "href": "https://github.com/awaithumans/awaithumans/releases",
+          "href": "https://github.com/awaithumans/awaithumans-human-in-the-loop-ai-agents/releases",
           "icon": "tag"
         }
       ]
@@ -148,11 +148,11 @@
     "links": [
       {
         "label": "GitHub",
-        "href": "https://github.com/awaithumans/awaithumans"
+        "href": "https://github.com/awaithumans/awaithumans-human-in-the-loop-ai-agents"
       },
       {
         "label": "Releases",
-        "href": "https://github.com/awaithumans/awaithumans/releases"
+        "href": "https://github.com/awaithumans/awaithumans-human-in-the-loop-ai-agents/releases"
       }
     ],
     "primary": {
@@ -175,7 +175,7 @@
   },
   "footer": {
     "socials": {
-      "github": "https://github.com/awaithumans/awaithumans",
+      "github": "https://github.com/awaithumans/awaithumans-human-in-the-loop-ai-agents",
       "x": "https://x.com/awaithumans"
     },
     "links": [
@@ -192,7 +192,7 @@
           },
           {
             "label": "Releases",
-            "href": "https://github.com/awaithumans/awaithumans/releases"
+            "href": "https://github.com/awaithumans/awaithumans-human-in-the-loop-ai-agents/releases"
           }
         ]
       },
@@ -243,7 +243,7 @@
         "items": [
           {
             "label": "GitHub",
-            "href": "https://github.com/awaithumans/awaithumans"
+            "href": "https://github.com/awaithumans/awaithumans-human-in-the-loop-ai-agents"
           },
           {
             "label": "Discord",
