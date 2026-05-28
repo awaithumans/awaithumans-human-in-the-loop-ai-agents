@@ -34,6 +34,7 @@ import pytest
 from pydantic import BaseModel
 
 from awaithumans.adapters.temporal import (
+    _CreateTaskInput,
     _signal_name,
     awaithumans_create_task,
     dispatch_signal,
@@ -41,15 +42,21 @@ from awaithumans.adapters.temporal import (
 from awaithumans.errors import (
     TaskCancelledError,
 )
-from awaithumans.server.core import encryption
-from awaithumans.server.core.config import settings
-from awaithumans.server.services.webhook_dispatch import sign_body
+
+# Server-side modules (encryption, settings, webhook_dispatch) are
+# imported lazily inside the fixture/helper bodies that use them. At
+# module top they would pull in cryptography and httpx, both of which
+# the Temporal workflow sandbox forbids at workflow-replay time when
+# this file is loaded as the host module of the workflow class.
 
 
 @pytest.fixture(autouse=True)
 def _payload_key() -> Iterator[None]:
     """HKDF derives the webhook key from PAYLOAD_KEY — required for
     `sign_body` and `verify_signature` to work."""
+    from awaithumans.server.core import encryption
+    from awaithumans.server.core.config import settings
+
     original = settings.PAYLOAD_KEY
     settings.PAYLOAD_KEY = secrets.token_urlsafe(32)
     encryption.reset_key_cache()
@@ -91,6 +98,8 @@ class _FakeTemporalClient:
 
 
 def _signed_body(payload: dict[str, Any]) -> tuple[bytes, str]:
+    from awaithumans.server.services.webhook_dispatch import sign_body
+
     body = json.dumps(payload).encode()
     return body, sign_body(body)
 
@@ -150,6 +159,8 @@ async def test_dispatch_signal_rejects_bad_signature() -> None:
 
 @pytest.mark.asyncio
 async def test_dispatch_signal_rejects_non_json_body() -> None:
+    from awaithumans.server.services.webhook_dispatch import sign_body
+
     client = _FakeTemporalClient()
     body = b"not-json"
     sig = sign_body(body)
@@ -258,14 +269,13 @@ async def test_await_human_returns_response_after_signal(
 
     # Stub the create-task activity so we don't need a real
     # awaithumans server. It returns a synthetic task_id and the
-    # workflow proceeds to wait_condition. The `@activity.defn`
-    # decoration is required as of temporalio >=1.x — the Worker
-    # rejects bare callables on its `activities=` list.
-    @activity.defn
-    async def fake_create(req: Any) -> dict:
-        # Type erased to `Any` so temporalio's @activity.defn type-
-        # hint resolver doesn't try to look up the function-local
-        # `adapter` symbol from module globals.
+    # workflow proceeds to wait_condition. The activity is registered
+    # under the same name the workflow dispatches by; the workflow runs
+    # inside the temporal sandbox with its own fresh import of the
+    # adapter, so an attribute-level monkeypatch on the outside-sandbox
+    # module would not be visible to the workflow's call site.
+    @activity.defn(name="awaithumans_create_task")
+    async def fake_create(req: _CreateTaskInput) -> dict:
         return {"id": "task-stub", "idempotency_key": req.idempotency_key}
 
     monkeypatch.setattr(adapter, "awaithumans_create_task", fake_create)
@@ -286,7 +296,10 @@ async def test_await_human_returns_response_after_signal(
                 task_queue="test-q",
             )
 
-            idem = adapter._default_idempotency_key("Approve refund?", _Payload(amount=100))
+            # The adapter derives the default idempotency key from the
+            # workflow id (`temporal:{workflow_id}`, PR #72); the signal
+            # name we send back has to match that derivation.
+            idem = f"temporal:{wf_id}"
             signal = adapter._signal_name(idem)
             await asyncio.sleep(0.5)  # let workflow register handler
             await handle.signal(
@@ -317,11 +330,10 @@ async def test_await_human_raises_typed_error_on_cancelled_status(
 
     from awaithumans.adapters import temporal as adapter
 
-    @activity.defn
-    async def fake_create(req: Any) -> dict:
-        # Type erased to `Any` so temporalio's @activity.defn type-
-        # hint resolver doesn't try to look up the function-local
-        # `adapter` symbol from module globals.
+    # See comment in test_await_human_returns_response_after_signal for
+    # why we register the stub under the same name as the real activity.
+    @activity.defn(name="awaithumans_create_task")
+    async def fake_create(req: _CreateTaskInput) -> dict:
         return {"id": "task-stub", "idempotency_key": req.idempotency_key}
 
     monkeypatch.setattr(adapter, "awaithumans_create_task", fake_create)
@@ -336,7 +348,10 @@ async def test_await_human_raises_typed_error_on_cancelled_status(
         ):
             wf_id = f"wf-{uuid.uuid4()}"
             handle = await client.start_workflow(_CancelWorkflow.run, id=wf_id, task_queue="test-q")
-            idem = adapter._default_idempotency_key("Approve refund?", _Payload(amount=100))
+            # The adapter derives the default idempotency key from the
+            # workflow id (`temporal:{workflow_id}`, PR #72); the signal
+            # name we send back has to match that derivation.
+            idem = f"temporal:{wf_id}"
             await asyncio.sleep(0.5)
             await handle.signal(
                 adapter._signal_name(idem),
@@ -377,11 +392,11 @@ async def test_create_task_activity_posts_with_bearer_when_api_key_set(
         kw.pop("transport", None)
         return real_client(transport=httpx.MockTransport(fake_handler), **kw)
 
-    # Adapter imports `httpx` at module level (not inline), so we
-    # patch the attribute reference the activity actually uses.
-    import awaithumans.adapters.temporal as adapter
-
-    monkeypatch.setattr(adapter.httpx, "AsyncClient", _factory)
+    # Adapter lazy-imports `httpx` inside the activity body (kept off the
+    # module top so the workflow sandbox can load this file). Patching
+    # the httpx module itself is what the activity's `import httpx` will
+    # observe.
+    monkeypatch.setattr(httpx, "AsyncClient", _factory)
 
     from awaithumans.adapters.temporal import _CreateTaskInput
 

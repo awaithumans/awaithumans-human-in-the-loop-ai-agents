@@ -7,10 +7,12 @@ import hashlib
 import json
 import logging
 import sys
-from typing import TypeVar
+from typing import TYPE_CHECKING, TypeVar
 
-import httpx
 from pydantic import BaseModel
+
+if TYPE_CHECKING:
+    import httpx  # noqa: F401
 
 from awaithumans.errors import (
     MarketplaceNotAvailableError,
@@ -159,6 +161,11 @@ async def await_human(
     form_definition = extract_form(response_schema).model_dump(mode="json")
 
     # ── Create task on the server ────────────────────────────────────
+    # Deferred so `awaithumans` is import-safe inside a Temporal workflow
+    # sandbox; httpx transitively pulls in urllib.request, which the
+    # sandbox forbids at workflow replay time.
+    import httpx
+
     async with httpx.AsyncClient(timeout=SDK_CREATE_TIMEOUT_SECONDS) as client:
         create_body = {
             "task": task,
@@ -213,6 +220,8 @@ async def _poll_until_terminal(
     The server's poll endpoint holds the connection for up to 25 seconds
     per request.
     """
+    import httpx
+
     async with httpx.AsyncClient(
         timeout=POLL_INTERVAL_SECONDS + SDK_POLL_TIMEOUT_BUFFER_SECONDS,
     ) as client:
