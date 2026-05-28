@@ -3,27 +3,47 @@ awaithumans — The human layer for AI agents.
 
 Your agents already await promises. Now they can await humans.
 
-Usage (async):
-    from awaithumans import await_human
+Quick start (recommended pattern — initialize once):
 
-    result = await await_human(
-        task="Approve this refund?",
-        payload_schema=RefundPayload,
-        payload=RefundPayload(amount=240, customer="cus_123"),
-        response_schema=RefundDecision,
-        timeout_seconds=900,
+    from awaithumans import AwaitHumans
+    from awaithumans.providers import OpenAI
+
+    client = AwaitHumans(
+        api_key="ah_sk_live_...",
+        openai=OpenAI(api_key="sk-..."),  # only needed for Flow B
     )
 
-Usage (sync):
-    from awaithumans import await_human_sync
+    result = await client.verify_document(
+        task_description="Confirm the codes in column 2.",
+        response_schema=VerifiedTable,
+        document_path="./drawing.pdf",   # or "https://..." URL
+        prior_extraction=YourPydanticModel(...),  # Flow A
+    )
 
-    result = await_human_sync(task=..., ...)
+Three flows are supported via optional arguments:
+
+  Flow A — Human Only (Bring Your Own Stack)
+      pass prior_extraction=YourPydanticModel(...)
+
+  Flow B — Model Then Human (Bring Your Own Model)
+      pass extraction=OpenAIExtraction(model="gpt-5", prompt="...")
+
+  Flow C — Human Then Model (AI verifier loop)
+      pass verifier=...
+
+Supported document formats:
+
+  Direct:
+    PDF, PNG, JPEG, TIFF, BMP, WEBP, GIF
+  Via LibreOffice headless conversion (system binary required):
+    DOCX, XLSX, PPTX, DOC, XLS, PPT, ODT, ODS, ODP, RTF
 """
 
 from __future__ import annotations
 
 __version__ = "0.1.7"
 
+from awaithumans.awaitverify.types import ManagedAssignment, Priority
 from awaithumans.client import await_human, await_human_sync
 from awaithumans.embed import EmbedTokenResult, embed_token, embed_token_sync
 from awaithumans.errors import (
@@ -40,6 +60,7 @@ from awaithumans.errors import (
     TimeoutRangeError,
     VerificationExhaustedError,
 )
+from awaithumans.instance import AwaitHumans, get_default_client, set_default_client
 from awaithumans.types import (
     AssignTo,
     AwaitHumanOptions,
@@ -51,12 +72,59 @@ from awaithumans.types import (
     VerifierResult,
 )
 
+# camelCase aliases per Pillar 12 rev 3 dual-naming. Same function
+# objects, second name.
+awaitHuman = await_human  # noqa: N816
+awaitHumanSync = await_human_sync  # noqa: N816
+
+
+async def verify_document(**kwargs: Any) -> Any:
+    """Module-level shim — uses the lazy default client.
+
+    For production code, prefer the explicit pattern:
+
+        client = AwaitHumans(api_key="...", openai=OpenAI(api_key="..."))
+        await client.verify_document(...)
+    """
+    return await get_default_client().verify_document(**kwargs)
+
+
+def verify_document_sync(**kwargs: Any) -> Any:
+    """Sync shim — uses the lazy default client."""
+    return get_default_client().verify_document_sync(**kwargs)
+
+
+# camelCase aliases for the verify shims
+awaitVerify = verify_document  # noqa: N816
+awaitVerifySync = verify_document_sync  # noqa: N816
+
+
+# Module-level type re-export needed by the shim's signature above
+from typing import Any  # noqa: E402
+
 __all__ = [
+    # client class + default-client controls
+    "AwaitHumans",
+    "get_default_client",
+    "set_default_client",
+    # core function (snake + camel)
     "await_human",
     "await_human_sync",
+    "awaitHuman",
+    "awaitHumanSync",
+    # AwaitVerify (snake + camel)
+    "verify_document",
+    "verify_document_sync",
+    "awaitVerify",
+    "awaitVerifySync",
+    # AwaitVerify types
+    "Priority",
+    "ManagedAssignment",
+    # embed tokens
     "embed_token",
     "embed_token_sync",
     "EmbedTokenResult",
+    # core types
     "AssignTo",
     "AwaitHumanOptions",
     "HumanIdentity",
@@ -65,6 +133,7 @@ __all__ = [
     "VerificationContext",
     "VerifierConfig",
     "VerifierResult",
+    # errors
     "AwaitHumansError",
     "MarketplaceNotAvailableError",
     "PollError",

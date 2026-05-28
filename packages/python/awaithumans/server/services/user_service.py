@@ -159,10 +159,7 @@ async def link_slack_identity_by_email(
         # path with a sharper hint.
         return None
 
-    if (
-        user.slack_team_id == slack_team_id
-        and user.slack_user_id == slack_user_id
-    ):
+    if user.slack_team_id == slack_team_id and user.slack_user_id == slack_user_id:
         return user
 
     # Atomic conditional update — only patches the row when

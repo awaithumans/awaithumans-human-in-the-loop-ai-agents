@@ -12,7 +12,127 @@ into a versioned release when tagged.
 
 ## [Unreleased]
 
-_Nothing yet — open the next change here._
+### Added
+
+- **`AwaitHumans` client class.** Initialize once with your API key and
+  reuse across calls instead of passing credentials per call:
+
+  ```python
+  from awaithumans import AwaitHumans
+  client = AwaitHumans(
+      api_key="ah_sk_live_...",
+      providers={"openai": "sk-..."},  # for Flow B
+  )
+  result = await client.verify_document(...)
+  ```
+
+  Module-level shim functions (`verify_document`, `await_human`) still
+  work for one-off scripts; they lazily create a default client from
+  environment variables. Provider credentials configured on the client
+  are used locally and never transmitted to AwaitVerify infrastructure.
+
+- **AwaitVerify managed document verification (Python SDK).** New
+  `verify_document` function (alias: `awaitVerify`) supporting all three
+  flows:
+
+  - **Flow A — Human Only:** pass `prior_extraction=...` (your already-
+    extracted data, which the human verifies)
+  - **Flow B — Model Then Human:** pass `extraction=ExtractionConfig(...)`
+    with provider + model + prompt. The SDK runs the model on the
+    caller's machine using customer-provided credentials, gets structured
+    output, and routes that output plus fragments to the human. v1 ships
+    OpenAI; other providers follow.
+  - **Flow C — Human Then Model:** pass `verifier=...` to enable the
+    existing AI verifier loop on the human's submission.
+
+  Documents are loaded locally and fragmented into five masked PNG views
+  client-side (Pillow + pdf2image, behind the new `[awaitverify]` extra).
+  The full unfragmented document never leaves the customer's environment.
+  Supports PDF, PNG, JPEG, TIFF, BMP, WEBP, GIF inputs. Up to **100 pages
+  per call**. Per-task `priority="standard"` or `"high"` selects the SLA
+  queue (Express = 2× rate, 30-min target firm Mon-Fri 8am-8pm ET).
+  See `pillars/12-awaitverify.md` rev 3.
+
+- **Dual-style function aliases.** Existing `await_human` /
+  `await_human_sync` now have camelCase aliases `awaitHuman` /
+  `awaitHumanSync` exported from the top-level `awaithumans` namespace.
+  Same function objects, second name. The new `verify_document` is also
+  aliased as `awaitVerify`. Class methods on `AwaitHumans` expose both
+  styles too (`client.await_human()` and `client.awaitHuman()`).
+
+- **Internal task timeout for AwaitVerify is hardcoded** at 24 hours.
+  Callers do not pass `timeout_seconds` on `verify_document`. This
+  prevents customer-set timeouts from firing before our SLA can be met
+  (standard SLA minimum is ~3-4 hours). Customers who want to abandon
+  an awaitable sooner can wrap the call in `asyncio.wait_for(...)`.
+
+- **PDF rasterization at 300 DPI ("print quality")** so small handwritten
+  content survives the rasterization step. PDFs were previously
+  rasterized at pdf2image's default DPI (200).
+
+- **`[awaitverify]` install extra** installs Pillow + pdf2image for
+  client-side fragmentation. Calling `verify_document()` without it
+  raises `VerifyDepsMissingError` with a clear install hint.
+
+- **`[awaitverify-openai]` install extra** installs `openai` for Flow B.
+  Calling `verify_document(extraction=...)` with `provider="openai"`
+  without this extra raises `VerifyDepsMissingError`.
+
+### Refactored (still pre-release — rev 4)
+
+- **Typed provider configuration.** Removed the `providers={"openai":
+  "sk-..."}` dict-keyed API. Replaced with explicit named constructor
+  kwargs on `AwaitHumans`:
+
+  ```python
+  from awaithumans import AwaitHumans
+  from awaithumans.providers import OpenAI, Anthropic
+
+  client = AwaitHumans(
+      api_key="ah_sk_...",
+      openai=OpenAI(api_key="sk-..."),
+      anthropic=Anthropic(api_key="sk-ant-..."),  # reserved, v1.1
+  )
+  ```
+
+  Adding a provider requires a typed config class, not a magic string
+  key. Typos are caught by the type checker.
+
+- **`ExtractionConfig` is now a typed union of provider-specific
+  classes.** Per-call Flow B uses `OpenAIExtraction(model="gpt-5",
+  prompt="...")` instead of a generic `ExtractionConfig(provider=
+  "openai", ...)`. Same pattern as the credentials.
+
+- **`prior_extraction` is now Pydantic-only.** `dict[str, Any]` is no
+  longer accepted. Callers must pass a `BaseModel` instance. The SDK
+  serializes to JSON internally.
+
+- **`document_path` accepts URLs as well as local paths.** The SDK
+  detects `http://` / `https://` prefix and fetches locally. Removed
+  the separate `document_url` parameter. `document_bytes` stays
+  separate for raw-bytes callers.
+
+- **`timeout_seconds` is back, with a 24-hour minimum.** Default 24
+  hours. Maximum 30 days. Setting below 24 hours raises
+  `VerifyTimeoutRangeError` with a clear hint pointing at
+  `asyncio.wait_for` for client-side early-exit. The 24-hour floor
+  protects against races with our 3-4 hour standard SLA.
+
+- **Office document support.** Adds DOCX, XLSX, PPTX, DOC, XLS, PPT,
+  ODT, ODS, ODP, RTF via LibreOffice headless conversion. Requires the
+  `libreoffice` system binary on PATH (override with
+  `AWAITHUMANS_LIBREOFFICE_BIN`). Detection via ZIP / OLE / RTF magic
+  bytes; conversion happens in a temporary directory wiped on exit.
+  Combined supported-formats list now: **PDF, PNG, JPEG, TIFF, BMP,
+  WEBP, GIF, DOCX, XLSX, PPTX, DOC, XLS, PPT, ODT, ODS, ODP, RTF.**
+
+- **Page cap raised from 10 to 100.** With signed-URL transport
+  arriving in the backend Phase 1, the original 5 MB payload ceiling
+  stops being the constraint.
+
+- **PDF rasterization at 300 DPI explicitly** (was the pdf2image
+  default of 200). Preserves small handwritten content (T12C3 vs
+  712C3 readability).
 
 ---
 

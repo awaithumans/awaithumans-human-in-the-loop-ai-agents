@@ -207,9 +207,7 @@ async def _resolve_slack_user_with_auto_link(
 
     See #144.
     """
-    direct = await get_user_by_slack(
-        session, slack_team_id=team_id, slack_user_id=slack_user_id
-    )
+    direct = await get_user_by_slack(session, slack_team_id=team_id, slack_user_id=slack_user_id)
     if direct is not None and direct.active:
         return direct, None
 

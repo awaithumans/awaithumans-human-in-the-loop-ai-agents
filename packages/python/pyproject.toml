@@ -129,6 +129,53 @@ verifier-gemini = [
 verifier-azure = [
     "openai>=1.50.0",
 ]
+awaitverify = [
+    # Client-side document fragmentation + AES-256-GCM encryption for
+    # the AwaitVerify managed product. Kept out of the base install
+    # so the core SDK stays lightweight (httpx + pydantic only).
+    # pdf2image requires the `poppler` system binary at runtime —
+    # documented in the VerifyDocumentLoadError hint and on
+    # awaithumans.dev/awaitverify.
+    "Pillow>=10.0.0",
+    "pdf2image>=1.17.0",
+    "cryptography>=43.0.0",
+]
+awaitverify-openai = [
+    # Flow B via OpenAI (LLM). The SDK calls OpenAI on the customer's
+    # machine with their API key — keys are never transmitted to
+    # AwaitVerify.
+    "openai>=1.50.0",
+]
+awaitverify-anthropic = [
+    # Flow B via Anthropic / Claude (LLM, tool use).
+    "anthropic>=0.40.0",
+]
+awaitverify-azure-openai = [
+    # Flow B via Azure OpenAI deployment. Same Python SDK as openai.
+    "openai>=1.50.0",
+]
+awaitverify-docling = [
+    # Open source OCR + layout. Runs locally, no API key. Requires a
+    # StructuringConfig (OpenAIStructuring / AnthropicStructuring /
+    # AzureOpenAIStructuring) for the response_schema-matching step.
+    "docling>=2.0.0",
+]
+awaitverify-paddleocr = [
+    # Open source OCR. Runs locally, no API key. Requires a
+    # StructuringConfig (see awaitverify-docling).
+    "paddleocr>=2.7.0",
+]
+awaitverify-reducto = [
+    # Reducto SaaS OCR. Customer brings their API key. Requires a
+    # StructuringConfig.
+    "reducto>=0.5.0",
+]
+awaitverify-azure-di = [
+    # Azure Document Intelligence (formerly Form Recognizer).
+    # Customer brings their endpoint + API key. Requires a
+    # StructuringConfig.
+    "azure-ai-documentintelligence>=1.0.0",
+]
 dev = [
     "pytest>=8.0.0",
     "pytest-asyncio>=0.24.0",
