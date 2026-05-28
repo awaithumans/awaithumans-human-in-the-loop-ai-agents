@@ -50,7 +50,6 @@ from dataclasses import dataclass
 from datetime import timedelta
 from typing import Any, TypeVar
 
-import httpx
 from pydantic import BaseModel
 
 from awaithumans.errors import (
@@ -160,6 +159,12 @@ async def awaithumans_create_task(req: _CreateTaskInput) -> dict[str, Any]:
     Temporal's automatic activity retries cover transient server
     errors; the workflow's wait_condition only proceeds once the
     activity returns a task_id."""
+    # httpx pulls in urllib.request transitively, which the workflow
+    # sandbox forbids at replay time. Keeping the import inside the
+    # activity body (which runs outside the sandbox) keeps the module
+    # import-safe for workflow code.
+    import httpx
+
     headers: dict[str, str] = {}
     if req.api_key:
         headers["Authorization"] = f"Bearer {req.api_key}"

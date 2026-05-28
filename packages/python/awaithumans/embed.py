@@ -23,8 +23,6 @@ import os
 import sys
 from dataclasses import dataclass
 
-import httpx
-
 DEFAULT_SERVER = "http://localhost:3001"
 
 
@@ -61,6 +59,11 @@ async def embed_token(
         body["sub"] = sub
     if ttl_seconds is not None:
         body["ttl_seconds"] = ttl_seconds
+
+    # Deferred so `awaithumans` is import-safe inside a Temporal workflow
+    # sandbox; httpx transitively pulls in urllib.request, which the
+    # sandbox forbids at workflow replay time.
+    import httpx
 
     async with httpx.AsyncClient(timeout=15.0) as client:
         res = await client.post(
