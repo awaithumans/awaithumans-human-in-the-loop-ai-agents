@@ -250,6 +250,7 @@ async def test_await_human_returns_response_after_signal(
     """Happy path: workflow registers signal handler, fires create-task
     activity, signals from outside, workflow returns typed response."""
     pytest.importorskip("temporalio")
+    from temporalio import activity
     from temporalio.testing import WorkflowEnvironment
     from temporalio.worker import Worker
 
@@ -257,8 +258,14 @@ async def test_await_human_returns_response_after_signal(
 
     # Stub the create-task activity so we don't need a real
     # awaithumans server. It returns a synthetic task_id and the
-    # workflow proceeds to wait_condition.
-    async def fake_create(req: adapter._CreateTaskInput) -> dict:
+    # workflow proceeds to wait_condition. The `@activity.defn`
+    # decoration is required as of temporalio >=1.x — the Worker
+    # rejects bare callables on its `activities=` list.
+    @activity.defn
+    async def fake_create(req: Any) -> dict:
+        # Type erased to `Any` so temporalio's @activity.defn type-
+        # hint resolver doesn't try to look up the function-local
+        # `adapter` symbol from module globals.
         return {"id": "task-stub", "idempotency_key": req.idempotency_key}
 
     monkeypatch.setattr(adapter, "awaithumans_create_task", fake_create)
@@ -304,12 +311,17 @@ async def test_await_human_raises_typed_error_on_cancelled_status(
     """Webhook delivers status=cancelled → workflow raises
     TaskCancelledError, not TaskTimeoutError. Agents can distinguish."""
     pytest.importorskip("temporalio")
+    from temporalio import activity
     from temporalio.testing import WorkflowEnvironment
     from temporalio.worker import Worker
 
     from awaithumans.adapters import temporal as adapter
 
-    async def fake_create(req: adapter._CreateTaskInput) -> dict:
+    @activity.defn
+    async def fake_create(req: Any) -> dict:
+        # Type erased to `Any` so temporalio's @activity.defn type-
+        # hint resolver doesn't try to look up the function-local
+        # `adapter` symbol from module globals.
         return {"id": "task-stub", "idempotency_key": req.idempotency_key}
 
     monkeypatch.setattr(adapter, "awaithumans_create_task", fake_create)
