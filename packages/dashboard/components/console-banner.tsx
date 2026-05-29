@@ -27,7 +27,7 @@ export function ConsoleBanner() {
 		// invitation. Short, specific, not generic AI filler.
 		// eslint-disable-next-line no-console
 		console.log(
-			"%c$ await_human()%c\n%c# the human layer for AI agents\n# source: github.com/awaithumans/awaithumans",
+			"%c$ await_human()%c\n%c# the human layer for AI agents\n# source: github.com/awaithumans/awaithumans-human-in-the-loop-ai-agents",
 			mono,
 			"",
 			body,

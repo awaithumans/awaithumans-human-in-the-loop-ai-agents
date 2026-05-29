@@ -188,8 +188,8 @@ awaithumans = "awaithumans.cli.main:app"
 
 [project.urls]
 Homepage = "https://awaithumans.dev"
-Repository = "https://github.com/awaithumans/awaithumans"
-Issues = "https://github.com/awaithumans/awaithumans/issues"
+Repository = "https://github.com/awaithumans/awaithumans-human-in-the-loop-ai-agents"
+Issues = "https://github.com/awaithumans/awaithumans-human-in-the-loop-ai-agents/issues"
 Documentation = "https://awaithumans.dev/docs"
 
 [tool.ruff]

@@ -3,8 +3,8 @@
 <div align="center">
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/awaithumans/awaithumans/main/docs/logo/dark.svg">
-  <img alt="awaithumans" src="https://raw.githubusercontent.com/awaithumans/awaithumans/main/docs/logo/light.svg" width="520">
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/awaithumans/awaithumans-human-in-the-loop-ai-agents/main/docs/logo/dark.svg">
+  <img alt="awaithumans" src="https://raw.githubusercontent.com/awaithumans/awaithumans-human-in-the-loop-ai-agents/main/docs/logo/light.svg" width="520">
 </picture>
 
 <br>
@@ -15,12 +15,12 @@
 
 [![PyPI installs](https://img.shields.io/pepy/dt/awaithumans?style=for-the-badge&label=PyPI%20installs&color=3775A9&logo=pypi&logoColor=white)](https://pepy.tech/project/awaithumans)
 [![npm installs](https://img.shields.io/npm/dt/awaithumans?style=for-the-badge&label=npm%20installs&color=CB3837&logo=npm&logoColor=white)](https://www.npmjs.com/package/awaithumans)
-[![GitHub stars](https://img.shields.io/github/stars/awaithumans/awaithumans?style=for-the-badge&color=FBBF24&logo=github&logoColor=white&label=GitHub%20stars)](https://github.com/awaithumans/awaithumans)
+[![GitHub stars](https://img.shields.io/github/stars/awaithumans/awaithumans-human-in-the-loop-ai-agents?style=for-the-badge&color=FBBF24&logo=github&logoColor=white&label=GitHub%20stars)](https://github.com/awaithumans/awaithumans-human-in-the-loop-ai-agents)
 
 [![PyPI](https://img.shields.io/pypi/v/awaithumans?label=pypi&color=3775A9&logo=pypi&logoColor=white)](https://pypi.org/project/awaithumans/)
 [![npm](https://img.shields.io/npm/v/awaithumans?label=npm&color=CB3837&logo=npm&logoColor=white)](https://www.npmjs.com/package/awaithumans)
-[![CI](https://img.shields.io/github/actions/workflow/status/awaithumans/awaithumans/test.yml?label=tests&logo=github&logoColor=white)](https://github.com/awaithumans/awaithumans/actions/workflows/test.yml)
-[![License](https://img.shields.io/badge/license-Apache_2.0-blue)](https://github.com/awaithumans/awaithumans/blob/main/LICENSE)
+[![CI](https://img.shields.io/github/actions/workflow/status/awaithumans/awaithumans-human-in-the-loop-ai-agents/test.yml?label=tests&logo=github&logoColor=white)](https://github.com/awaithumans/awaithumans-human-in-the-loop-ai-agents/actions/workflows/test.yml)
+[![License](https://img.shields.io/badge/license-Apache_2.0-blue)](https://github.com/awaithumans/awaithumans-human-in-the-loop-ai-agents/blob/main/LICENSE)
 [![Python](https://img.shields.io/badge/python-3.10%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/downloads/)
 [![Discord](https://img.shields.io/badge/discord-join-5865F2?logo=discord&logoColor=white)](https://discord.gg/Kewdh7vjdc)
 
@@ -56,9 +56,9 @@ The agent waits on `decision` like it waits on any other Promise or Future.
 A human gets notified ([Slack](https://slack.com), email, dashboard), reviews the request, and
 submits a typed response. The agent resumes with the typed answer.
 
-![awaithumans demo — an agent creates a task, a human reviews it, the agent resumes with the typed response](https://raw.githubusercontent.com/awaithumans/awaithumans/main/docs/images/hero-demo.gif)
+![awaithumans demo — an agent creates a task, a human reviews it, the agent resumes with the typed response](https://raw.githubusercontent.com/awaithumans/awaithumans-human-in-the-loop-ai-agents/main/docs/images/hero-demo.gif)
 
-![The awaithumans dashboard — pending tasks queued for human review](https://raw.githubusercontent.com/awaithumans/awaithumans/main/docs/images/hero-dashboard.png)
+![The awaithumans dashboard — pending tasks queued for human review](https://raw.githubusercontent.com/awaithumans/awaithumans-human-in-the-loop-ai-agents/main/docs/images/hero-dashboard.png)
 
 ---
 
@@ -170,7 +170,7 @@ Add `notify=["slack:#ops"]` and the task lands in the channel with a
 response form opens as a modal. Completing it unblocks the agent
 just like the dashboard path.
 
-![Slack broadcast — a task posted to a channel with a Claim button](https://raw.githubusercontent.com/awaithumans/awaithumans/main/docs/images/slack-broadcast.png)
+![Slack broadcast — a task posted to a channel with a Claim button](https://raw.githubusercontent.com/awaithumans/awaithumans-human-in-the-loop-ai-agents/main/docs/images/slack-broadcast.png)
 
 ```python
 decision = await await_human(
@@ -323,16 +323,16 @@ the entire extension surface.
 
 Drop this badge in your project's README so folks know where the HITL primitive came from:
 
-[![Powered by awaithumans](https://raw.githubusercontent.com/awaithumans/awaithumans/main/docs/images/badges/powered-by-awaithumans.svg)](https://github.com/awaithumans/awaithumans)
+[![Powered by awaithumans](https://raw.githubusercontent.com/awaithumans/awaithumans-human-in-the-loop-ai-agents/main/docs/images/badges/powered-by-awaithumans.svg)](https://github.com/awaithumans/awaithumans-human-in-the-loop-ai-agents)
 
 ```markdown
-[![Powered by awaithumans](https://raw.githubusercontent.com/awaithumans/awaithumans/main/docs/images/badges/powered-by-awaithumans.svg)](https://github.com/awaithumans/awaithumans)
+[![Powered by awaithumans](https://raw.githubusercontent.com/awaithumans/awaithumans-human-in-the-loop-ai-agents/main/docs/images/badges/powered-by-awaithumans.svg)](https://github.com/awaithumans/awaithumans-human-in-the-loop-ai-agents)
 ```
 
 Or generate a generic variant via [shields.io](https://shields.io):
 
 ```markdown
-[![Powered by awaithumans](https://img.shields.io/badge/Powered_by-awaithumans-00E676)](https://github.com/awaithumans/awaithumans)
+[![Powered by awaithumans](https://img.shields.io/badge/Powered_by-awaithumans-00E676)](https://github.com/awaithumans/awaithumans-human-in-the-loop-ai-agents)
 ```
 
 ---
@@ -374,7 +374,7 @@ the project's trademarks without permission.
 
 The full primitive, all three channels (dashboard / Slack / email), both durable adapters (Temporal / LangGraph), AI verification across four providers, and one-command self-hosting are all live in this release.
 
-This is a young project — APIs are stable for v0.x, but expect rough edges in the long tail. File issues, open PRs, drop questions in [Discussions](https://github.com/awaithumans/awaithumans/discussions) or [Discord](https://discord.gg/Kewdh7vjdc). Every reproducible bug report shipped with a fix in v0.2.
+This is a young project — APIs are stable for v0.x, but expect rough edges in the long tail. File issues, open PRs, drop questions in [Discussions](https://github.com/awaithumans/awaithumans-human-in-the-loop-ai-agents/discussions) or [Discord](https://discord.gg/Kewdh7vjdc). Every reproducible bug report shipped with a fix in v0.2.
 
 For the post-launch roadmap — local task book for runtimes without an orchestrator, custom router strategies, post-launch hardening — see [Roadmap & help wanted](https://docs.awaithumans.dev/community/roadmap).
 
@@ -392,9 +392,9 @@ awaithumans is built by the maintainers and these brilliant community contributo
     <b>Hiren Gajjar</b>
   </a><br>
   <sub><code>awaithumans doctor</code></sub><br>
-  <sub><a href="https://github.com/awaithumans/awaithumans/pull/150">#150</a></sub>
+  <sub><a href="https://github.com/awaithumans/awaithumans-human-in-the-loop-ai-agents/pull/150">#150</a></sub>
 </td>
 </tr>
 </table>
 
-Want to be on this list? Pick a [`good first issue`](https://github.com/awaithumans/awaithumans/labels/good%20first%20issue), drop a comment on it to claim, and we'll review your PR within ~24h. As we grow, this gallery shrinks each avatar back down to a tight grid — same shape, more faces.
+Want to be on this list? Pick a [`good first issue`](https://github.com/awaithumans/awaithumans-human-in-the-loop-ai-agents/labels/good%20first%20issue), drop a comment on it to claim, and we'll review your PR within ~24h. As we grow, this gallery shrinks each avatar back down to a tight grid — same shape, more faces.

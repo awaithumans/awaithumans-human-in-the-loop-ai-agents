@@ -50,7 +50,7 @@ export const DOCS_BASE_URL = "https://docs.awaithumans.dev";
 export const DOCS_TROUBLESHOOTING_URL = `${DOCS_BASE_URL}/troubleshooting`;
 
 /** Project links. */
-export const GITHUB_URL = "https://github.com/awaithumans/awaithumans";
+export const GITHUB_URL = "https://github.com/awaithumans/awaithumans-human-in-the-loop-ai-agents";
 
 /** Shown in the sidebar footer. Bump on each dashboard release. */
 export const APP_VERSION = "v0.1.0 · alpha";

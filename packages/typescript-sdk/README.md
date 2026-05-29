@@ -2,7 +2,7 @@
 
 <div align="center">
 
-<img alt="awaithumans" src="https://cdn.jsdelivr.net/gh/awaithumans/awaithumans@main/docs/logo/light.svg" width="520">
+<img alt="awaithumans" src="https://cdn.jsdelivr.net/gh/awaithumans/awaithumans-human-in-the-loop-ai-agents@main/docs/logo/light.svg" width="520">
 
 <br>
 
@@ -11,14 +11,14 @@
 <br>
 
 [![npm installs](https://img.shields.io/npm/dt/awaithumans?style=for-the-badge&label=npm%20installs&color=CB3837&logo=npm&logoColor=white)](https://www.npmjs.com/package/awaithumans)
-[![GitHub stars](https://img.shields.io/github/stars/awaithumans/awaithumans?style=for-the-badge&color=FBBF24&logo=github&logoColor=white&label=GitHub%20stars)](https://github.com/awaithumans/awaithumans)
+[![GitHub stars](https://img.shields.io/github/stars/awaithumans/awaithumans-human-in-the-loop-ai-agents?style=for-the-badge&color=FBBF24&logo=github&logoColor=white&label=GitHub%20stars)](https://github.com/awaithumans/awaithumans-human-in-the-loop-ai-agents)
 
 [![npm](https://img.shields.io/npm/v/awaithumans?label=npm&color=CB3837&logo=npm&logoColor=white)](https://www.npmjs.com/package/awaithumans)
 [![Node](https://img.shields.io/badge/node-20%2B-339933?logo=node.js&logoColor=white)](https://nodejs.org/)
-[![License](https://img.shields.io/badge/license-Apache_2.0-blue)](https://github.com/awaithumans/awaithumans/blob/main/LICENSE)
+[![License](https://img.shields.io/badge/license-Apache_2.0-blue)](https://github.com/awaithumans/awaithumans-human-in-the-loop-ai-agents/blob/main/LICENSE)
 [![Discord](https://img.shields.io/badge/discord-join-5865F2?logo=discord&logoColor=white)](https://discord.gg/Kewdh7vjdc)
 
-[**Docs**](https://docs.awaithumans.dev) · [**Quickstart**](https://docs.awaithumans.dev/quickstart) · [**Examples**](https://github.com/awaithumans/awaithumans/tree/main/examples/quickstart-ts) · [**Discord**](https://discord.gg/Kewdh7vjdc)
+[**Docs**](https://docs.awaithumans.dev) · [**Quickstart**](https://docs.awaithumans.dev/quickstart) · [**Examples**](https://github.com/awaithumans/awaithumans-human-in-the-loop-ai-agents/tree/main/examples/quickstart-ts) · [**Discord**](https://discord.gg/Kewdh7vjdc)
 
 </div>
 
@@ -53,9 +53,9 @@ if (decision.approved) {
 }
 ```
 
-![awaithumans demo — an agent creates a task, a human reviews it, the agent resumes with the typed response](https://cdn.jsdelivr.net/gh/awaithumans/awaithumans@main/docs/images/hero-demo.gif)
+![awaithumans demo — an agent creates a task, a human reviews it, the agent resumes with the typed response](https://cdn.jsdelivr.net/gh/awaithumans/awaithumans-human-in-the-loop-ai-agents@main/docs/images/hero-demo.gif)
 
-![The awaithumans dashboard — pending tasks queued for human review](https://cdn.jsdelivr.net/gh/awaithumans/awaithumans@main/docs/images/hero-dashboard.png)
+![The awaithumans dashboard — pending tasks queued for human review](https://cdn.jsdelivr.net/gh/awaithumans/awaithumans-human-in-the-loop-ai-agents@main/docs/images/hero-dashboard.png)
 
 ---
 
@@ -100,7 +100,7 @@ Prefer Docker? `docker run -p 3001:3001 ghcr.io/awaithumans/awaithumans:latest`.
 
 Tasks can be delivered to Slack channels with a "Claim this task" button — first clicker atomically wins, response form opens as a modal, agent unblocks when they submit. Add `notify: ["slack:#ops"]` to the `awaitHuman()` call:
 
-![Slack broadcast — a task posted to a channel with a Claim button](https://cdn.jsdelivr.net/gh/awaithumans/awaithumans@main/docs/images/slack-broadcast.png)
+![Slack broadcast — a task posted to a channel with a Claim button](https://cdn.jsdelivr.net/gh/awaithumans/awaithumans-human-in-the-loop-ai-agents@main/docs/images/slack-broadcast.png)
 
 ---
 
@@ -140,16 +140,16 @@ client.onAwait((task) => ({ approved: true, note: "looks good" }));
 
 ## Documentation
 
-- **Repository:** [github.com/awaithumans/awaithumans](https://github.com/awaithumans/awaithumans)
+- **Repository:** [github.com/awaithumans/awaithumans-human-in-the-loop-ai-agents](https://github.com/awaithumans/awaithumans-human-in-the-loop-ai-agents)
 - **Full docs:** [awaithumans.dev](https://awaithumans.dev)
-- **Quickstart:** [`examples/quickstart-ts/`](https://github.com/awaithumans/awaithumans/tree/main/examples/quickstart-ts)
-- **Changelog:** [`CHANGELOG.md`](https://github.com/awaithumans/awaithumans/blob/main/CHANGELOG.md)
+- **Quickstart:** [`examples/quickstart-ts/`](https://github.com/awaithumans/awaithumans-human-in-the-loop-ai-agents/tree/main/examples/quickstart-ts)
+- **Changelog:** [`CHANGELOG.md`](https://github.com/awaithumans/awaithumans-human-in-the-loop-ai-agents/blob/main/CHANGELOG.md)
 
 ---
 
 ## License
 
-[Apache License 2.0](https://github.com/awaithumans/awaithumans/blob/main/LICENSE).
+[Apache License 2.0](https://github.com/awaithumans/awaithumans-human-in-the-loop-ai-agents/blob/main/LICENSE).
 The TypeScript SDK, every adapter subpath export, and the Python
 server + dashboard it talks to are all under the same license —
 permissive, OSI-approved, with an explicit patent grant.
