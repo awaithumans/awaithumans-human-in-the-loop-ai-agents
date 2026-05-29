@@ -30,3 +30,6 @@ uv.lock
 # Dev-mode auto-generated state — payload encryption key + admin
 # token + sqlite DB. Per-developer secrets, never committed.
 .awaithumans/
+
+# Claude Code local artifacts
+.claude/
