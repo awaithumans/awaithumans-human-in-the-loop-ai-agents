@@ -290,6 +290,36 @@ function TaskDetailPageInner() {
 			<div className="grid grid-cols-3 gap-6">
 				{/* Left: Payload + Response Form */}
 				<div className="col-span-2 space-y-6">
+					{/* Caller-supplied context. Renders above the payload so
+					    reviewers see who/why before they read what. Hidden
+					    when the agent didn't attach anything. */}
+					{task.task_metadata &&
+					Object.keys(task.task_metadata).length > 0 ? (
+						<div className="border border-brand/20 rounded-lg p-5 bg-brand/[0.03]">
+							<Eyebrow
+								as="h2"
+								size="md"
+								tone="bright"
+								weight="semibold"
+								className="block mb-4"
+							>
+								Context
+							</Eyebrow>
+							<div className="space-y-3">
+								{Object.entries(task.task_metadata).map(
+									([key, value]) => (
+										<div key={key} className="flex items-start gap-3">
+											<span className="text-white/40 text-sm min-w-[120px] font-mono">
+												{key}
+											</span>
+											<span className="text-sm break-all">{value}</span>
+										</div>
+									),
+								)}
+							</div>
+						</div>
+					) : null}
+
 					{/* Payload */}
 					<div className="border border-white/10 rounded-lg p-5">
 						<Eyebrow as="h2" size="md" tone="bright" weight="semibold" className="block mb-4">

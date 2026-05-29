@@ -70,11 +70,17 @@ def form_to_modal(
     task_title: str,
     task_payload: dict[str, Any] | None,
     redact_payload: bool = False,
+    task_metadata: dict[str, str] | None = None,
 ) -> dict[str, Any]:
     """Build a Block Kit modal view for a form.
 
     `task_id` is stored in `private_metadata` so the view_submission
     handler can look up the task without trusting the Slack-side state.
+
+    `task_metadata` (when present) renders as a context block between
+    the header and the payload preview so the reviewer sees free-form
+    context (customer name, business vertical, etc.) before they start
+    filling out the form.
     """
     blocks: list[dict[str, Any]] = []
 
@@ -87,6 +93,8 @@ def form_to_modal(
             },
         }
     )
+
+    blocks.extend(task_metadata_blocks(task_metadata))
 
     if task_payload and not redact_payload:
         lines = [
@@ -119,6 +127,45 @@ def form_to_modal(
 # notification surfaces where Slack truncates aggressively.
 _MESSAGE_TITLE_MAX = 200
 
+# Limits on how task_metadata renders in Slack. Slack's "context" block
+# accepts up to 10 elements, each ~256 chars of text, but the visual
+# weight gets noisy fast — five well-chosen key-value pairs leave room
+# for the rest of the message. Operators wanting richer structure
+# should put it on the payload, which already has channel-specific
+# rendering.
+_METADATA_MAX_ENTRIES = 5
+_METADATA_VALUE_MAX = 80
+
+
+def task_metadata_blocks(
+    metadata: dict[str, str] | None,
+) -> list[dict[str, Any]]:
+    """Render task_metadata as a Slack `context` block + divider.
+
+    Empty / None metadata returns an empty list so callers can splat
+    the result unconditionally. Keys are bolded; values are
+    truncated. We don't sort the dict here — preserving insertion
+    order respects the caller's choice about which key matters most.
+    """
+    if not metadata:
+        return []
+
+    items = list(metadata.items())[:_METADATA_MAX_ENTRIES]
+    overflow = len(metadata) - len(items)
+
+    line = " · ".join(
+        f"*{k}*: {truncate(str(v), _METADATA_VALUE_MAX)}" for k, v in items
+    )
+    if overflow > 0:
+        line += f" · _+{overflow} more_"
+
+    return [
+        {
+            "type": "context",
+            "elements": [{"type": "mrkdwn", "text": line}],
+        }
+    ]
+
 
 def open_review_message_blocks(
     *,
@@ -129,6 +176,7 @@ def open_review_message_blocks(
     unsupported_fields: list[str] | None = None,
     broadcast: bool = False,
     claim_button_action_id: str | None = None,
+    task_metadata: dict[str, str] | None = None,
 ) -> list[dict[str, Any]]:
     """Initial message posted to a channel/user when a task is created.
 
@@ -183,10 +231,12 @@ def open_review_message_blocks(
         }
     )
 
-    return [
+    blocks: list[dict[str, Any]] = [
         {"type": "section", "text": {"type": "mrkdwn", "text": text}},
-        {"type": "actions", "elements": elements},
     ]
+    blocks.extend(task_metadata_blocks(task_metadata))
+    blocks.append({"type": "actions", "elements": elements})
+    return blocks
 
 
 def terminal_message_blocks(

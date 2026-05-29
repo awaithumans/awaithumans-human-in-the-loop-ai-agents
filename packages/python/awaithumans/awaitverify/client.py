@@ -146,6 +146,7 @@ async def verify_document(
     priority: Priority | str | None = None,
     timeout_seconds: int | None = None,
     idempotency_key: str | None = None,
+    task_metadata: dict[str, str] | None = None,
 ) -> T:
     """Verify a document via AwaitVerify managed reviewers.
 
@@ -175,6 +176,12 @@ async def verify_document(
             Defaults to 48h.
         idempotency_key: Reserved — not yet supported in the managed
             backend (Phase 3).
+        task_metadata: Free-form key-value context shown to the human
+            reviewer verbatim in Slack and the dashboard. Examples:
+            ``{"customer": "Acme Corp", "vertical": "construction"}``.
+            Helpful when the reviewer needs domain context to make a
+            judgment call. Keys/values are strings; nested structures
+            are rejected by the managed backend.
     """
     if client is None:
         from awaithumans.instance import get_default_client  # noqa: PLC0415
@@ -287,6 +294,7 @@ async def verify_document(
         task_description=task_description,
         response_schema_json=response_schema_json,
         priority=resolved_priority.value,
+        task_metadata=task_metadata,
     )
 
     logger.info(

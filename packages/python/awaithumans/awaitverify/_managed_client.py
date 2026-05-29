@@ -137,16 +137,22 @@ async def create_task(
     task_description: str,
     response_schema_json: str,
     priority: str,
+    task_metadata: dict[str, str] | None = None,
 ) -> CreatedTask:
     """POST /api/v1/awaitverify/tasks."""
+    body: dict[str, Any] = {
+        "upload_session_id": upload_session_id,
+        "task_description": task_description,
+        "response_schema_json": response_schema_json,
+        "priority": priority,
+    }
+    # Only include task_metadata when set so we don't push an
+    # ambiguous null at the managed backend's schema validation.
+    if task_metadata:
+        body["task_metadata"] = task_metadata
     data = await _post_json(
         url=f"{managed_url.rstrip('/')}/api/v1/awaitverify/tasks",
-        body={
-            "upload_session_id": upload_session_id,
-            "task_description": task_description,
-            "response_schema_json": response_schema_json,
-            "priority": priority,
-        },
+        body=body,
         api_key=api_key,
     )
     return CreatedTask(

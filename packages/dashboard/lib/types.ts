@@ -16,6 +16,13 @@ export interface Task {
 	payload_schema: Record<string, unknown>;
 	response_schema: Record<string, unknown>;
 	form_definition: FormDefinition | null;
+	/**
+	 * Caller-supplied free-form context shown to the reviewer
+	 * verbatim. Examples: customer company, business vertical,
+	 * escalation tier. Free-form string→string map; nested
+	 * structures are rejected at the server schema layer.
+	 */
+	task_metadata: Record<string, string> | null;
 	status: TaskStatus;
 	assign_to: Record<string, unknown> | null;
 	assigned_to_email: string | null;

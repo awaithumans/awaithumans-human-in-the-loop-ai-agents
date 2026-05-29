@@ -69,6 +69,20 @@ class Task(SQLModel, table=True):
     # Notification
     notify: list[str] | None = Field(sa_column=Column(JSON), default=None)
 
+    # Caller-supplied free-form metadata. Surfaced to reviewers in
+    # Slack notifications, the review modal, and the dashboard task
+    # detail panel — context the agent code wants the reviewer to
+    # see when deciding how to complete the task. The shape is
+    # ``dict[str, str]`` deliberately (not ``dict[str, Any]``): the
+    # rendering surfaces are key-value text labels, and nested
+    # structures invite reviewers to chase irrelevant detail. JSON
+    # numbers / arrays / objects supplied here are still accepted
+    # at the DB layer (SQLite is permissive), but the SDK + schema
+    # coerce values to strings before they arrive.
+    task_metadata: dict[str, str] | None = Field(
+        sa_column=Column(JSON), default=None
+    )
+
     # Response
     response: dict[str, Any] | None = Field(sa_column=Column(JSON), default=None)
 

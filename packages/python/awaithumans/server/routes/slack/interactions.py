@@ -335,6 +335,7 @@ async def _open_modal_for_task(
             task_title=task.task,
             task_payload=task.payload,
             redact_payload=task.redact_payload,
+            task_metadata=task.task_metadata,
         )
     except UnrenderableInSlackError as exc:
         logger.warning("Task %s not Slack-renderable: %s", task_id, exc)

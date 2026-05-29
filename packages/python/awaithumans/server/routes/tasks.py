@@ -177,6 +177,7 @@ async def create_task_route(
         verifier_config=body.verifier_config,
         redact_payload=body.redact_payload,
         callback_url=body.callback_url,
+        task_metadata=body.task_metadata,
     )
 
     # Replay header: clients that care about distinguishing fresh
