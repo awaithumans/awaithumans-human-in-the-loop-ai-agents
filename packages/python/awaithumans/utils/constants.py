@@ -307,3 +307,59 @@ SERVICE_KEY_PREFIX = "ah_sk_"
 SERVICE_KEY_RAW_BYTES = 20
 SERVICE_KEY_DISPLAY_PREFIX_LENGTH = 12
 SERVICE_KEY_MAX_NAME_LENGTH = 80
+
+# ─── AwaitVerify (managed document verification) ─────────────────────────
+# See `pillars/12-awaitverify.md` (rev 3) for product spec.
+
+# Marker on `assign_to.managed` that routes a task to the AwaitVerify
+# managed reviewer pool. The server's router recognizes this value and
+# dispatches to the AwaitVerify queue rather than the customer's own
+# user directory. Stable string — bump only for breaking server changes.
+AWAITVERIFY_MANAGED_TAG = "awaitverify"
+
+# Five-region client-side fragmentation: one base document → five masked
+# views. Pillar 12 rev 3 §"Security architecture" pins this at five.
+AWAITVERIFY_FRAGMENT_COUNT = 5
+
+# Soft cap on document pages per verify_document call. With signed-URL
+# uploads (v1) the payload-size ceiling no longer applies, so we can
+# raise this from the original 10. 100 is a generous ceiling that
+# still gives us a defensible "single document" bound.
+AWAITVERIFY_MAX_PAGES = 100
+
+# AwaitVerify timeout floor and default. We require a minimum of 24
+# hours because our SLA guarantee for standard priority is ~3-4 hours
+# and we want generous headroom before the task gets marked
+# `timed_out`. Default is 48 hours so customers have a working day
+# of buffer before they need to think about extending. Customers who
+# need to bail out of their local process earlier can wrap the call
+# in `asyncio.wait_for(...)`; the task continues server-side either
+# way.
+AWAITVERIFY_MIN_TIMEOUT_SECONDS = 24 * 60 * 60  # 24 hours
+AWAITVERIFY_DEFAULT_TIMEOUT_SECONDS = 48 * 60 * 60  # 48 hours
+
+# pdf2image rasterization DPI. 300 is print quality, sufficient for
+# handwritten and small-font content (T12C3 vs 712C3 readability test).
+# Higher DPI inflates fragment size; lower DPI risks misreads.
+AWAITVERIFY_PDF_RASTER_DPI = 300
+
+# Pillow image formats accepted as input. PDF is handled separately
+# by pdf2image. Office formats are converted to PDF first via
+# LibreOffice headless (system binary).
+AWAITVERIFY_SUPPORTED_IMAGE_FORMATS = frozenset({"PNG", "JPEG", "TIFF", "BMP", "WEBP", "GIF"})
+
+# Office formats Pillow / pdf2image cannot decode but LibreOffice can
+# convert. Detection by file-extension hint plus magic-byte sniffing
+# (ZIP for modern Office Open XML, OLE CFB for legacy formats).
+AWAITVERIFY_SUPPORTED_OFFICE_EXTENSIONS = frozenset(
+    {".docx", ".xlsx", ".pptx", ".doc", ".xls", ".ppt", ".odt", ".ods", ".odp", ".rtf"}
+)
+
+# LibreOffice binary name. Override with the AWAITHUMANS_LIBREOFFICE_BIN
+# env var if the binary lives at a non-standard location.
+AWAITVERIFY_LIBREOFFICE_BIN_ENV = "AWAITHUMANS_LIBREOFFICE_BIN"
+AWAITVERIFY_LIBREOFFICE_DEFAULT_BIN = "libreoffice"
+
+# Max wall time for the LibreOffice conversion subprocess. Office
+# files of typical size convert in 1-5s; 60s gives generous headroom.
+AWAITVERIFY_LIBREOFFICE_TIMEOUT_SECONDS = 60
