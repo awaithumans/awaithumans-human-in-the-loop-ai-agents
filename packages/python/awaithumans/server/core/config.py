@@ -167,26 +167,43 @@ class Settings(BaseSettings):
 
     @property
     def database_url_async(self) -> str:
-        """Resolved async database URL."""
+        """Resolved async database URL.
+
+        Accepts a libpq-style ``?sslmode=...`` query param (the form
+        every managed Postgres provider — Azure, Heroku, Supabase,
+        Render — hands you) and translates it to asyncpg's
+        ``?ssl=...`` so the URL works without manual editing. asyncpg
+        accepts the SAME set of values as libpq (``disable``, ``allow``,
+        ``prefer``, ``require``, ``verify-ca``, ``verify-full``) under
+        a different parameter name; without the translation the
+        connection silently hangs or raises ``ClientConfigurationError``.
+        """
         if self.DATABASE_URL:
             url = self.DATABASE_URL
             if url.startswith("postgres://"):
-                return url.replace("postgres://", "postgresql+asyncpg://", 1)
-            if url.startswith("postgresql://"):
-                return url.replace("postgresql://", "postgresql+asyncpg://", 1)
-            return url
+                url = url.replace("postgres://", "postgresql+asyncpg://", 1)
+            elif url.startswith("postgresql://"):
+                url = url.replace("postgresql://", "postgresql+asyncpg://", 1)
+            return _translate_libpq_to_asyncpg(url)
 
         Path(self.DB_PATH).parent.mkdir(parents=True, exist_ok=True)
         return f"sqlite+aiosqlite:///{self.DB_PATH}"
 
     @property
     def database_url_sync(self) -> str:
-        """Resolved sync database URL (for migrations)."""
+        """Resolved sync database URL (for migrations).
+
+        Reverse of the async path: if the operator supplied an
+        asyncpg-style ``?ssl=...`` param, translate it to
+        ``?sslmode=...`` so psycopg (which alembic uses for migrations)
+        accepts it. Most operators paste a libpq URL — but the
+        async->sync round-trip should also work without surprises.
+        """
         if self.DATABASE_URL:
             url = self.DATABASE_URL
             if url.startswith("postgres://"):
-                return url.replace("postgres://", "postgresql://", 1)
-            return url
+                url = url.replace("postgres://", "postgresql://", 1)
+            return _translate_asyncpg_to_libpq(url)
 
         Path(self.DB_PATH).parent.mkdir(parents=True, exist_ok=True)
         return f"sqlite:///{self.DB_PATH}"
@@ -201,6 +218,38 @@ class Settings(BaseSettings):
     @property
     def is_production(self) -> bool:
         return self.ENVIRONMENT.upper() == "PRODUCTION"
+
+
+# Both libpq (sslmode=...) and asyncpg (ssl=...) accept the same
+# set of values, just under different parameter names. The two
+# helpers below translate between the styles so an operator's
+# pasted-from-cloud-provider URL works on both the async runtime
+# engine AND the sync alembic engine without manual editing.
+_SSL_VALUES = ("disable", "allow", "prefer", "require", "verify-ca", "verify-full")
+
+
+def _translate_libpq_to_asyncpg(url: str) -> str:
+    """``?sslmode=require`` → ``?ssl=require`` for every supported value.
+
+    asyncpg's own DSN parser rejects ``sslmode`` as a parameter name
+    (it understands the values but not the libpq key). Translating
+    here means a single canonical ``DATABASE_URL`` env var works on
+    both Postgres clients.
+    """
+    for value in _SSL_VALUES:
+        url = url.replace(f"sslmode={value}", f"ssl={value}")
+    return url
+
+
+def _translate_asyncpg_to_libpq(url: str) -> str:
+    """``?ssl=require`` → ``?sslmode=require``.
+
+    Reverse of the above so psycopg (used by alembic for migrations)
+    accepts an asyncpg-style URL too.
+    """
+    for value in _SSL_VALUES:
+        url = url.replace(f"ssl={value}", f"sslmode={value}")
+    return url
 
 
 settings = Settings()
