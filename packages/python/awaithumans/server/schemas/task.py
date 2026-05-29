@@ -25,6 +25,18 @@ class CreateTaskRequest(BaseModel):
     verifier_config: dict[str, Any] | None = None
     redact_payload: bool = False
     callback_url: str | None = None
+    # Optional caller-supplied context shown to reviewers verbatim
+    # in Slack + on the dashboard. Free-form key-value strings —
+    # nested structures are rejected here so the rendering surfaces
+    # have one shape to format.
+    task_metadata: dict[str, str] | None = Field(
+        default=None,
+        description=(
+            "Free-form key-value context the reviewer should see "
+            "when deciding how to complete the task. Examples: "
+            "customer name, business vertical, escalation tier."
+        ),
+    )
 
 
 class CompleteTaskRequest(BaseModel):
@@ -41,6 +53,7 @@ class TaskResponse(BaseModel):
     payload_schema: dict[str, Any]
     response_schema: dict[str, Any]
     form_definition: dict[str, Any] | None = None
+    task_metadata: dict[str, str] | None = None
     status: TaskStatus
     assign_to: dict[str, Any] | None = None
     assigned_to_email: str | None = None

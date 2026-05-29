@@ -130,6 +130,7 @@ def _stub_managed_calls(
         task_description: str,
         response_schema_json: str,
         priority: str,
+        task_metadata: dict[str, str] | None = None,
     ) -> Any:
         from awaithumans.awaitverify._managed_client import CreatedTask
 
@@ -140,6 +141,7 @@ def _stub_managed_calls(
             "task_description": task_description,
             "response_schema_json": response_schema_json,
             "priority": priority,
+            "task_metadata": task_metadata,
         }
         return CreatedTask(
             task_id="task-id-fake",

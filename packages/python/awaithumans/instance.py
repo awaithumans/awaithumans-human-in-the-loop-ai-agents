@@ -153,11 +153,13 @@ class AwaitHumans:
         priority: Priority | str | None = None,
         timeout_seconds: int | None = None,
         idempotency_key: str | None = None,
+        task_metadata: dict[str, str] | None = None,
     ) -> Any:
         """Verify a document via AwaitVerify managed reviewers.
 
         See the module-level `verify_document` for the full argument
-        reference.
+        reference, including `task_metadata` for surfacing free-form
+        context to the reviewer.
         """
         from awaithumans.awaitverify.client import (  # noqa: PLC0415
             verify_document as _verify,
@@ -175,6 +177,7 @@ class AwaitHumans:
             priority=priority,
             timeout_seconds=timeout_seconds,
             idempotency_key=idempotency_key,
+            task_metadata=task_metadata,
         )
 
     def verify_document_sync(self, **kwargs: Any) -> Any:

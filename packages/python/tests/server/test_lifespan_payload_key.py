@@ -19,7 +19,7 @@ import secrets
 
 import pytest
 
-from awaithumans.server.app import lifespan, create_app
+from awaithumans.server.app import create_app, lifespan
 from awaithumans.server.core import encryption
 from awaithumans.server.core.config import settings
 

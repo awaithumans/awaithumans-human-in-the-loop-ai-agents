@@ -112,6 +112,7 @@ async def notify_task(
                 unsupported_fields=offenders if offenders else None,
                 broadcast=broadcast,
                 claim_button_action_id=SLACK_ACTION_CLAIM_TASK,
+                task_metadata=task.task_metadata,
             )
 
             client = await _resolve_client(session, route)

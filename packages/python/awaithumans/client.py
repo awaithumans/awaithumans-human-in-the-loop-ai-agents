@@ -102,6 +102,7 @@ async def await_human(
     verifier: VerifierConfig | None = None,
     idempotency_key: str | None = None,
     redact_payload: bool = False,
+    task_metadata: dict[str, str] | None = None,
     server_url: str | None = None,
     api_key: str | None = None,
 ) -> T:
@@ -179,6 +180,7 @@ async def await_human(
             "notify": notify,
             "verifier_config": verifier.model_dump() if verifier else None,
             "redact_payload": redact_payload,
+            "task_metadata": task_metadata,
         }
 
         try:
