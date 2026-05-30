@@ -82,6 +82,16 @@ server = [
     "alembic>=1.14.0",
     "aiosqlite>=0.20.0",
     "asyncpg>=0.30.0",
+    # asyncpg is the async runtime driver, but alembic uses *sync*
+    # SQLAlchemy and SQLAlchemy's default sync Postgres dialect
+    # (`postgresql://...`) imports psycopg2. Without it,
+    # `alembic upgrade head` on a fresh Postgres deployment fails
+    # with `ModuleNotFoundError: No module named 'psycopg2'` during
+    # the server's startup lifespan — and the uvicorn lifespan
+    # swallows the traceback, so the operator sees the container
+    # exit silently. The `-binary` wheel avoids needing libpq + a
+    # C compiler at install time.
+    "psycopg2-binary>=2.9.10",
     "slack-sdk>=3.33.0",
     # slack_sdk has no runtime deps of its own — the async client
     # imports aiohttp lazily, so without this listed explicitly a fresh
