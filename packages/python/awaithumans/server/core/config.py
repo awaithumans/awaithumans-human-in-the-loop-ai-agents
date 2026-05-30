@@ -28,6 +28,13 @@ class Settings(BaseSettings):
     # ── Database ─────────────────────────────────────────────────────
     DATABASE_URL: str | None = None
     DB_PATH: str = ".awaithumans/dev.db"
+    # Operator acknowledgement that the SQLite path lives on durable
+    # storage (or that data loss is acceptable). Suppresses the
+    # production-SQLite warning in `server/app.py` lifespan. Default
+    # False because the failure mode it warns about — silent data loss
+    # on container restart when the runtime ignores VOLUME — is severe
+    # and not detectable from inside the process.
+    ALLOW_EPHEMERAL_DB: bool = False
 
     # ── Dashboard auth ────────────────────────────────────────────────
     # Auth is always on. First-run state (empty users table) is handled

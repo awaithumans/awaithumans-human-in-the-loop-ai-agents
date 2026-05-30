@@ -148,6 +148,14 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         await init_db()
         logger.info("Database initialized")
 
+        # Warn loudly when production is running on SQLite. In most
+        # container runtimes the default SQLite path is ephemeral —
+        # operators on Azure Container Apps and similar have lost task
+        # data on every restart because the Dockerfile's `VOLUME`
+        # directive isn't honored. The check runs after init_db so the
+        # warning is the LAST thing during DB setup and easy to spot.
+        _warn_if_ephemeral_sqlite_in_production()
+
         # Capture whether this is first-run inside the lifespan (the DB
         # session is ready here). The banner itself prints after uvicorn
         # logs "Application startup complete" so it's the LAST thing the
@@ -216,6 +224,77 @@ async def _print_banner_after_startup(setup_url: str) -> None:
 
     await asyncio.sleep(0.4)
     bootstrap.log_setup_banner(setup_url)
+
+
+def _warn_if_ephemeral_sqlite_in_production() -> None:
+    """Log an eye-catching multi-line WARNING when production is
+    running on SQLite without an explicit acknowledgment.
+
+    In most container runtimes (Azure Container Apps, plain Docker
+    without ``-v``, k8s without a PVC, Render free tier, …) the
+    default SQLite path lives on a writable-but-ephemeral overlay
+    filesystem. Every container restart wipes the task store and the
+    audit trail. The Dockerfile's ``VOLUME`` directive is supposed to
+    prevent that, but several runtimes ignore it silently.
+
+    Detecting "ephemeral" reliably from inside the process would
+    require runtime-specific filesystem heuristics that age badly.
+    Instead we trust the operator to know: in production with SQLite,
+    log a loud warning unless ``AWAITHUMANS_ALLOW_EPHEMERAL_DB=true``
+    is set — that env var is the operator's signed acknowledgment
+    that they've put the SQLite file on durable storage (or
+    genuinely don't care about durability).
+
+    Postgres deployments and non-production environments are silent
+    — they don't have the failure mode this warns about.
+    """
+    if not settings.is_production:
+        return
+
+    using_sqlite = not settings.DATABASE_URL or settings.DATABASE_URL.startswith(
+        ("sqlite://", "sqlite+aiosqlite://")
+    )
+    if not using_sqlite:
+        return
+
+    if settings.ALLOW_EPHEMERAL_DB:
+        # Operator has explicitly acknowledged the risk (e.g. they've
+        # mounted the DB_PATH directory off durable storage). Quietly
+        # note it at INFO so an audit log still shows the decision.
+        logger.info(
+            "AWAITHUMANS_ALLOW_EPHEMERAL_DB=true — skipping the "
+            "production-SQLite durability warning (operator-acknowledged)."
+        )
+        return
+
+    width = 72
+    divider = "═" * width
+    banner_lines = [
+        "",
+        divider,
+        "  WARNING: production environment is running on SQLite.",
+        "",
+        f"    DB path:  {settings.DB_PATH}",
+        f"    URL:      {settings.DATABASE_URL or '(unset — SQLite default)'}",
+        "",
+        "  In most container runtimes (Azure Container Apps, plain Docker,",
+        "  k8s without a PVC, Render free tier) the SQLite path lives on",
+        "  an ephemeral overlay filesystem. Every container restart wipes",
+        "  the task store and the audit trail — silently.",
+        "",
+        "  To fix:",
+        "    - Point AWAITHUMANS_DATABASE_URL at Postgres, OR",
+        "    - Confirm AWAITHUMANS_DB_PATH lives on a mounted, durable",
+        "      volume in your runtime's terms (not just an in-container path).",
+        "",
+        "  To silence this warning once durability is confirmed:",
+        "    AWAITHUMANS_ALLOW_EPHEMERAL_DB=true",
+        divider,
+        "",
+    ]
+    # Single multi-line WARNING record — pipelines aggregating on log
+    # level will surface it as one event, not 20 separate lines.
+    logger.warning("\n".join(banner_lines))
 
 
 def create_app(*, serve_dashboard: bool = True) -> FastAPI:
