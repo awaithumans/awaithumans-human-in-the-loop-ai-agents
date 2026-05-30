@@ -23,7 +23,18 @@ from awaithumans.server.db import models  # noqa: F401
 config = context.config
 
 if config.config_file_name is not None:
-    fileConfig(config.config_file_name)
+    # `disable_existing_loggers=False` is critical: the default (True)
+    # marks every logger created before this call as disabled, which
+    # silently drops any subsequent log records. Because alembic runs
+    # inside the app's startup lifespan (init_db -> alembic upgrade),
+    # leaving the default flips the app's own `awaithumans.server`
+    # logger to disabled and every post-migration warning / info call
+    # vanishes. That hid the ephemeral-SQLite warning in production
+    # and broke caplog-based tests for the same code path. Keeping
+    # alembic's own log config (which only configures the alembic /
+    # sqlalchemy loggers) while leaving everything else alone is the
+    # behavior we actually want.
+    fileConfig(config.config_file_name, disable_existing_loggers=False)
 
 # Override sqlalchemy.url with the app's resolved sync URL so alembic
 # and the app agree on which database to touch, regardless of how the
