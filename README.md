@@ -282,8 +282,15 @@ dev` (via [uv](https://astral.sh/uv)) so you never touch a Python env.
 ## Self-hosted
 
 ```bash
-docker run -p 3001:3001 ghcr.io/awaithumans/awaithumans:latest
+docker run -p 3001:3001 ghcr.io/awaithumans/awaithumans-human-in-the-loop-ai-agents:latest
 ```
+
+> **Note on the image name.** The canonical image is
+> `ghcr.io/awaithumans/awaithumans-human-in-the-loop-ai-agents`. The
+> shorter `ghcr.io/awaithumans/awaithumans` from earlier release notes
+> is **deprecated** and frozen at a pre-rename build — older docs and
+> blog posts pointing there pull a stale image. Update any pipelines
+> or compose files referencing the short name.
 
 Or `docker compose up` with the included `docker-compose.yml`
 (optional Postgres block inside). Backs everything — API, dashboard,
@@ -358,7 +365,7 @@ actionable fixes. Catches ~80% of first-run issues in under 2 seconds.
 |---|---|---|
 | `awaithumans` (Python SDK + server + CLI + dashboard) | PyPI | Apache 2.0 |
 | `awaithumans` (TypeScript SDK) | npm | Apache 2.0 |
-| `ghcr.io/awaithumans/awaithumans` (container) | GHCR | Apache 2.0 |
+| `ghcr.io/awaithumans/awaithumans-human-in-the-loop-ai-agents` (container) | GHCR | Apache 2.0 |
 
 **License:** [Apache License 2.0](LICENSE). Permissive, OSI-approved,
 with an explicit patent grant. Use it in proprietary stacks, fork it,

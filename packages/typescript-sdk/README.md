@@ -96,7 +96,7 @@ powershell -c "irm https://astral.sh/uv/install.ps1 | iex"  # windows
 First run prints a setup URL. Open it, create the operator account,
 you're in. The dashboard is at `http://localhost:3001`.
 
-Prefer Docker? `docker run -p 3001:3001 ghcr.io/awaithumans/awaithumans:latest`.
+Prefer Docker? `docker run -p 3001:3001 ghcr.io/awaithumans/awaithumans-human-in-the-loop-ai-agents:latest`.
 
 Tasks can be delivered to Slack channels with a "Claim this task" button — first clicker atomically wins, response form opens as a modal, agent unblocks when they submit. Add `notify: ["slack:#ops"]` to the `awaitHuman()` call:
 

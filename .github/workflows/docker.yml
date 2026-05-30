@@ -5,7 +5,10 @@ name: Docker image
 #  - every push of a `v*.*.*` tag (tags: `:vX.Y.Z`, `:X.Y.Z`, `:latest`)
 #  - manual dispatch for one-off builds
 #
-# Publishes to ghcr.io/<owner>/awaithumans. GHCR is free, integrates
+# Publishes to ghcr.io/<owner>/<repo>, which after the repo rename is
+# ghcr.io/awaithumans/awaithumans-human-in-the-loop-ai-agents. The legacy
+# ghcr.io/awaithumans/awaithumans image is frozen at a pre-rename build.
+# GHCR is free, integrates
 # with GitHub auth (no extra secrets needed — GITHUB_TOKEN works), and
 # supports multi-arch manifests out of the box.
 #

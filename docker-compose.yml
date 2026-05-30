@@ -16,7 +16,7 @@
 
 services:
   awaithumans:
-    image: ghcr.io/awaithumans/awaithumans:latest
+    image: ghcr.io/awaithumans/awaithumans-human-in-the-loop-ai-agents:latest
     # Build from source instead if you're working in the repo:
     # build: .
     restart: unless-stopped

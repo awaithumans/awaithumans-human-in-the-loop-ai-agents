@@ -114,6 +114,6 @@ typed `decision` back. No JSON-twiddling.
   `notify: ["email:reviewer@company.com"]`. Needs the channel
   configured on the server — see [docs](https://docs.awaithumans.dev).
 - **Docker:** don't want to install uv? `docker run -p 3001:3001
-  ghcr.io/awaithumans/awaithumans:latest` runs the same server.
+  ghcr.io/awaithumans/awaithumans-human-in-the-loop-ai-agents:latest` runs the same server.
 - **Python:** the same flow in Python —
   [`examples/quickstart/`](../quickstart/).

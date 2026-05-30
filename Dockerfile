@@ -17,7 +17,7 @@
 #   3. `runtime` — slim Python, installs the wheel with [server]
 #       extras, runs as a non-root user, exposes :3001.
 #
-# Users run `docker run -p 3001:3001 ghcr.io/awaithumans/awaithumans`
+# Users run `docker run -p 3001:3001 ghcr.io/awaithumans/awaithumans-human-in-the-loop-ai-agents`
 # and get API + UI on the same port. No Python toolchain needed.
 # ──────────────────────────────────────────────────────────────────────
 
