@@ -113,4 +113,13 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
   CMD python -c "import urllib.request,sys; urllib.request.urlopen('http://localhost:3001/api/health', timeout=3)" \
       || exit 1
 
-CMD ["awaithumans", "dev"]
+# Production entrypoint. `awaithumans serve` is the prod-mode CLI:
+# it runs uvicorn against the FastAPI app factory with explicit defaults
+# and refuses to start unless storage (DATABASE_URL or DB_PATH) is set.
+# The Dockerfile pre-sets AWAITHUMANS_DB_PATH above, so the bare image
+# boots into single-node SQLite-on-volume mode — operators who outgrow
+# that point AWAITHUMANS_DATABASE_URL at Postgres and the env-var check
+# still passes. For local hacking on the source tree, use
+# `awaithumans dev` instead (auto-generates keys, tokens, and a SQLite
+# path under .awaithumans/).
+CMD ["awaithumans", "serve"]

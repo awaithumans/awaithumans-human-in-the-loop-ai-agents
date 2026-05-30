@@ -34,6 +34,7 @@ from awaithumans.cli.commands.list_service_keys import list_service_keys
 from awaithumans.cli.commands.list_users import list_users_cmd
 from awaithumans.cli.commands.remove_user import remove_user
 from awaithumans.cli.commands.revoke_service_key import revoke_service_key
+from awaithumans.cli.commands.serve import serve
 from awaithumans.cli.commands.set_password import set_password_cmd
 from awaithumans.cli.commands.version import version
 
@@ -44,6 +45,7 @@ app = typer.Typer(
 )
 
 app.command()(dev)
+app.command()(serve)
 app.command("bootstrap-operator")(bootstrap_operator)
 app.command("add-user")(add_user)
 app.command()(doctor)
