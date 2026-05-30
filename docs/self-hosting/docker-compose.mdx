@@ -15,6 +15,12 @@ docker compose up
 
 Once up, point your DNS at the host. Done.
 
+## Entrypoint: `awaithumans serve`
+
+The published image runs `awaithumans serve` as its `CMD`. That's the production entrypoint — it runs `uvicorn` against the FastAPI app factory and refuses to start unless `AWAITHUMANS_DATABASE_URL` (or, for SQLite-on-volume deployments, `AWAITHUMANS_DB_PATH`) is set explicitly. The compose example below satisfies that by setting `AWAITHUMANS_DATABASE_URL` to the bundled Postgres service.
+
+For local development against the source tree, use `awaithumans dev` instead — it auto-generates a `PAYLOAD_KEY`, an admin token, and a SQLite path under `./.awaithumans/`, and writes a discovery file so the SDK auto-connects. Don't use `dev` for any deployment you care about — the auto-provisioned SQLite path is not durable across container restarts on most runtimes.
+
 ## docker-compose.yml
 
 ```yaml

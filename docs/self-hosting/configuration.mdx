@@ -34,7 +34,7 @@ In dev (`awaithumans dev`), the CLI auto-generates these for you and writes the 
 | Variable | Default | Description |
 |---|---|---|
 | `AWAITHUMANS_DATABASE_URL` | (none) | Full Postgres URL. Overrides the SQLite default. |
-| `AWAITHUMANS_DB_PATH` | `.awaithumans/dev.db` | SQLite file path. Used when `DATABASE_URL` is unset. |
+| `AWAITHUMANS_DB_PATH` | `.awaithumans/dev.db` (dev only) | SQLite file path. Used when `DATABASE_URL` is unset. |
 
 ```bash
 # SQLite (dev / single-user)
@@ -43,6 +43,8 @@ AWAITHUMANS_DB_PATH=/var/lib/awaithumans/data.db
 # Postgres (production)
 AWAITHUMANS_DATABASE_URL=postgresql://user:pass@host:5432/dbname
 ```
+
+The `.awaithumans/dev.db` default is **only honored by `awaithumans dev`** (the local development CLI). `awaithumans serve` (the production entrypoint, and the default Docker CMD) refuses to start unless one of `AWAITHUMANS_DATABASE_URL` or `AWAITHUMANS_DB_PATH` is set explicitly — this prevents the silent-data-loss footgun where a container restart on an ephemeral filesystem wipes the SQLite file.
 
 ## Server
 
