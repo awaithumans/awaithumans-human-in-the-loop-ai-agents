@@ -9,6 +9,8 @@ from __future__ import annotations
 import asyncio
 import logging
 import re
+import sys
+import traceback
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager, suppress
 from pathlib import Path
@@ -105,44 +107,69 @@ class EmbedResponseHeadersMiddleware(BaseHTTPMiddleware):
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-    """Startup and shutdown lifecycle."""
-    # Fail fast on a misconfigured PAYLOAD_KEY (bad length, bad base64,
-    # missing entirely). The key is needed for every signed-session
-    # cookie, but `get_key()` was only invoked lazily on the first
-    # request that needed it — which for new operators is the signup
-    # POST. The lazy failure surfaced as a generic
-    # 500 INTERNAL_ERROR with the helpful EncryptionKeyError message
-    # buried in server logs and the operator left with a half-created
-    # user row, no session, and no path forward (#140).
-    #
-    # Calling get_key() here surfaces the same error message at boot,
-    # before uvicorn accepts traffic — so the operator sees the
-    # remediation hint on the very first run, not after their first
-    # failed signup.
+    """Startup and shutdown lifecycle.
+
+    The entire startup body is wrapped so that any exception during
+    init_db(), scheduler creation, or first-run-token generation is
+    logged with a full traceback before being re-raised. Without this,
+    uvicorn's lifespan path catches startup exceptions and exits the
+    container with code 3 and no traceback in stdout/stderr — only
+    ``INFO: Waiting for application startup.`` and silence. The
+    pattern bit operators four times during a single Azure Container
+    Apps rollout (missing psycopg2-binary, bad Postgres URL hostname,
+    asyncpg auth failure, opaque Postgres lifespan crash). Logging at
+    ERROR level AND writing the traceback directly to stderr means
+    the cause survives both default log-config filtering and any
+    runtime that drops stderr-vs-stdout one way or the other.
+    """
     try:
-        get_key()
-    except (EncryptionKeyError, EncryptionNotConfiguredError) as exc:
-        logger.error(
-            "Refusing to start: AWAITHUMANS_PAYLOAD_KEY is misconfigured. %s",
-            exc,
-        )
+        # Fail fast on a misconfigured PAYLOAD_KEY (bad length, bad base64,
+        # missing entirely). The key is needed for every signed-session
+        # cookie, but `get_key()` was only invoked lazily on the first
+        # request that needed it — which for new operators is the signup
+        # POST. The lazy failure surfaced as a generic
+        # 500 INTERNAL_ERROR with the helpful EncryptionKeyError message
+        # buried in server logs and the operator left with a half-created
+        # user row, no session, and no path forward (#140).
+        #
+        # Calling get_key() here surfaces the same error message at boot,
+        # before uvicorn accepts traffic — so the operator sees the
+        # remediation hint on the very first run, not after their first
+        # failed signup.
+        try:
+            get_key()
+        except (EncryptionKeyError, EncryptionNotConfiguredError) as exc:
+            logger.error(
+                "Refusing to start: AWAITHUMANS_PAYLOAD_KEY is misconfigured. %s",
+                exc,
+            )
+            raise
+
+        await init_db()
+        logger.info("Database initialized")
+
+        # Capture whether this is first-run inside the lifespan (the DB
+        # session is ready here). The banner itself prints after uvicorn
+        # logs "Application startup complete" so it's the LAST thing the
+        # operator sees — not buried between alembic migrations and the
+        # "Running on http://..." line.
+        setup_url = await _first_run_setup_url()
+
+        scheduler_task = asyncio.create_task(run_timeout_scheduler())
+        webhook_task = asyncio.create_task(run_webhook_scheduler())
+        banner_task: asyncio.Task[None] | None = None
+        if setup_url:
+            banner_task = asyncio.create_task(_print_banner_after_startup(setup_url))
+    except Exception:
+        tb = traceback.format_exc()
+        logger.error("Lifespan startup failed — server will exit.\n%s", tb)
+        # Also write straight to stderr in case logging is misconfigured or
+        # filtered. Operators reading container logs (Azure Container Apps,
+        # Docker, k8s) need at least one of these to survive. Using
+        # sys.stderr.write (not print) so the ruff print-check stays clean.
+        sys.stderr.write(tb)
+        sys.stderr.flush()
         raise
-
-    await init_db()
-    logger.info("Database initialized")
-
-    # Capture whether this is first-run inside the lifespan (the DB
-    # session is ready here). The banner itself prints after uvicorn
-    # logs "Application startup complete" so it's the LAST thing the
-    # operator sees — not buried between alembic migrations and the
-    # "Running on http://..." line.
-    setup_url = await _first_run_setup_url()
-
-    scheduler_task = asyncio.create_task(run_timeout_scheduler())
-    webhook_task = asyncio.create_task(run_webhook_scheduler())
-    banner_task: asyncio.Task[None] | None = None
-    if setup_url:
-        banner_task = asyncio.create_task(_print_banner_after_startup(setup_url))
 
     yield
 
