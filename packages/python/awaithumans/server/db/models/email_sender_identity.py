@@ -18,7 +18,7 @@ from sqlalchemy import Column
 from sqlmodel import Field, SQLModel
 
 from awaithumans.server.core.encryption import EncryptedString
-from awaithumans.server.db.models.base import utc_now
+from awaithumans.server.db.models.base import tz_timestamp_column, utc_now
 
 
 class EmailSenderIdentity(SQLModel, table=True):
@@ -52,7 +52,16 @@ class EmailSenderIdentity(SQLModel, table=True):
     # Unverified identities can still be used (operator's choice) but
     # the dashboard will flag them.
     verified: bool = Field(default=False)
-    verified_at: datetime | None = Field(default=None)
+    verified_at: datetime | None = Field(
+        default=None,
+        sa_column=tz_timestamp_column(nullable=True),
+    )
 
-    created_at: datetime = Field(default_factory=utc_now)
-    updated_at: datetime = Field(default_factory=utc_now)
+    created_at: datetime = Field(
+        default_factory=utc_now,
+        sa_column=tz_timestamp_column(),
+    )
+    updated_at: datetime = Field(
+        default_factory=utc_now,
+        sa_column=tz_timestamp_column(),
+    )

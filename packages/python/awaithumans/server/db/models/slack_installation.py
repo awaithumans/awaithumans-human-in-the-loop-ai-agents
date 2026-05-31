@@ -18,7 +18,7 @@ from sqlalchemy import Column
 from sqlmodel import Field, SQLModel
 
 from awaithumans.server.core.encryption import EncryptedString
-from awaithumans.server.db.models.base import utc_now
+from awaithumans.server.db.models.base import tz_timestamp_column, utc_now
 
 
 class SlackInstallation(SQLModel, table=True):
@@ -47,5 +47,11 @@ class SlackInstallation(SQLModel, table=True):
     # Who kicked off the install — useful for support + audit.
     installed_by_user_id: str | None = Field(default=None)
 
-    installed_at: datetime = Field(default_factory=utc_now)
-    updated_at: datetime = Field(default_factory=utc_now)
+    installed_at: datetime = Field(
+        default_factory=utc_now,
+        sa_column=tz_timestamp_column(),
+    )
+    updated_at: datetime = Field(
+        default_factory=utc_now,
+        sa_column=tz_timestamp_column(),
+    )

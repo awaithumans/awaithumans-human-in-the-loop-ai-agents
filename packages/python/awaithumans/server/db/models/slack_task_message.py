@@ -23,7 +23,7 @@ from datetime import datetime
 
 from sqlmodel import Field, SQLModel
 
-from awaithumans.server.db.models.base import new_id, utc_now
+from awaithumans.server.db.models.base import new_id, tz_timestamp_column, utc_now
 
 
 class SlackTaskMessage(SQLModel, table=True):
@@ -45,4 +45,7 @@ class SlackTaskMessage(SQLModel, table=True):
     # there's only one workspace by construction so we don't need to
     # pin one. Set when an OAuth-installed workspace posted.
     team_id: str | None = Field(default=None, max_length=64)
-    created_at: datetime = Field(default_factory=utc_now)
+    created_at: datetime = Field(
+        default_factory=utc_now,
+        sa_column=tz_timestamp_column(),
+    )
