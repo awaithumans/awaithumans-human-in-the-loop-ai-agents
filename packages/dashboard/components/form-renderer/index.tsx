@@ -49,6 +49,8 @@ import {
 	SectionRenderer,
 } from "./layout";
 import { SubformRenderer, TableRenderer } from "./complex";
+import { ImageCarousel } from "./image-carousel";
+import { groupImageFields } from "./image-grouping";
 import type { FormValue } from "./types";
 
 export { buildResponseValue } from "./build-response-value";
@@ -62,17 +64,33 @@ type Props = {
 };
 
 export function FormRenderer({ form, value, onChange, disabled }: Props) {
+	// Group top-level image fields into a single carousel when there
+	// are 2+ — reviewers don't have to scroll a long vertical stack
+	// of document fragments. Single-image forms keep their inline
+	// renderer (no carousel chrome).
+	const slots = groupImageFields(form.fields);
 	return (
 		<div className="space-y-4">
-			{form.fields.map((field, i) => (
-				<FieldDispatch
-					key={`${field.name || field.kind}-${i}`}
-					field={field}
-					value={value}
-					onChange={onChange}
-					disabled={disabled}
-				/>
-			))}
+			{slots.map((slot, i) => {
+				if (slot.kind === "carousel") {
+					return (
+						<ImageCarousel
+							key={`carousel-${i}`}
+							images={slot.images}
+						/>
+					);
+				}
+				const field = slot.field;
+				return (
+					<FieldDispatch
+						key={`${field.name || field.kind}-${i}`}
+						field={field}
+						value={value}
+						onChange={onChange}
+						disabled={disabled}
+					/>
+				);
+			})}
 		</div>
 	);
 }
