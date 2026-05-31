@@ -218,4 +218,164 @@ describe("buildResponseValue", () => {
 			amounts: [{ currency: "USD" }, { currency: "EUR", memo: "" }],
 		});
 	});
+
+	// ── Nested Pydantic groups (PR C, O3) ────────────────────────────
+
+	it("assembles object_group children into a nested dict", () => {
+		const group: FormDefinition["fields"][number] = {
+			kind: "object_group",
+			name: "address",
+			label: "Address",
+			required: false,
+			hint: null,
+			fields: [shortText("city", false), shortText("zip", true)],
+		} as unknown as FormDefinition["fields"][number];
+		const f = form([group]);
+
+		const value: FormValue = {
+			address: { city: "Brooklyn", zip: "11201" },
+		};
+		expect(buildResponseValue(f, value)).toEqual({
+			address: { city: "Brooklyn", zip: "11201" },
+		});
+	});
+
+	it("object_group drops blank optional child but keeps required null", () => {
+		// Reviewer left an optional city blank and didn't fill required zip.
+		// Optional city is dropped (server applies its Pydantic default);
+		// required zip stays as null so Pydantic surfaces a clean
+		// "missing required field" error.
+		const group: FormDefinition["fields"][number] = {
+			kind: "object_group",
+			name: "address",
+			label: "Address",
+			required: false,
+			hint: null,
+			fields: [shortText("city", false), shortText("zip", true)],
+		} as unknown as FormDefinition["fields"][number];
+		const f = form([group]);
+
+		const value: FormValue = {
+			address: { city: null, zip: null },
+		};
+		expect(buildResponseValue(f, value)).toEqual({
+			address: { zip: null },
+		});
+	});
+
+	it("non-object value for object_group is treated as empty", () => {
+		// Defensive: if the renderer ever puts a non-object at the
+		// group's slot (e.g. an array via wire drift), we don't
+		// crash — we assemble from an empty sub-scope. The required
+		// city ends up with undefined in the output, which
+		// JSON.stringify drops, so the server sees `{address: {}}`
+		// and surfaces a clean "city missing" validation error.
+		const group: FormDefinition["fields"][number] = {
+			kind: "object_group",
+			name: "address",
+			label: "Address",
+			required: false,
+			hint: null,
+			fields: [shortText("city", true)],
+		} as unknown as FormDefinition["fields"][number];
+		const f = form([group]);
+
+		const value: FormValue = { address: ["unexpected"] };
+		const result = buildResponseValue(f, value);
+		// Wire shape — what the server actually receives after JSON.stringify.
+		expect(JSON.parse(JSON.stringify(result))).toEqual({
+			address: {},
+		});
+	});
+
+	it("assembles repeatable_group rows as a list of cleaned dicts", () => {
+		const group: FormDefinition["fields"][number] = {
+			kind: "repeatable_group",
+			name: "line_items",
+			label: "Line items",
+			required: false,
+			hint: null,
+			item_fields: [
+				shortText("sku", true),
+				shortText("memo", false),
+			],
+			min_items: null,
+			max_items: null,
+		} as unknown as FormDefinition["fields"][number];
+		const f = form([group]);
+
+		const value: FormValue = {
+			line_items: [
+				{ sku: "A-1", memo: null }, // optional memo dropped
+				{ sku: "B-9", memo: "fast" }, // memo kept
+				{ sku: null, memo: null }, // required sku stays null
+			],
+		};
+		expect(buildResponseValue(f, value)).toEqual({
+			line_items: [
+				{ sku: "A-1" },
+				{ sku: "B-9", memo: "fast" },
+				{ sku: null },
+			],
+		});
+	});
+
+	it("empty repeatable_group serializes as an empty array", () => {
+		// Reviewer added no rows. Distinct from "the column doesn't
+		// exist" — sending `[]` lets the Pydantic schema's `default=[]`
+		// validate cleanly when the field is non-nullable.
+		const group: FormDefinition["fields"][number] = {
+			kind: "repeatable_group",
+			name: "rows",
+			label: "Rows",
+			required: false,
+			hint: null,
+			item_fields: [shortText("name", true)],
+			min_items: null,
+			max_items: null,
+		} as unknown as FormDefinition["fields"][number];
+		const f = form([group]);
+
+		expect(buildResponseValue(f, { rows: [] })).toEqual({ rows: [] });
+	});
+
+	it("nested object_group inside repeatable_group row recurses correctly", () => {
+		// Realistic shape: each line item carries a sub-address.
+		// The walker descends both levels in one pass.
+		const group: FormDefinition["fields"][number] = {
+			kind: "repeatable_group",
+			name: "shipments",
+			label: "Shipments",
+			required: false,
+			hint: null,
+			item_fields: [
+				shortText("carrier", true),
+				{
+					kind: "object_group",
+					name: "destination",
+					label: "Destination",
+					required: false,
+					hint: null,
+					fields: [shortText("city", true), shortText("zip", false)],
+				} as unknown as FormDefinition["fields"][number],
+			],
+			min_items: null,
+			max_items: null,
+		} as unknown as FormDefinition["fields"][number];
+		const f = form([group]);
+
+		const value: FormValue = {
+			shipments: [
+				{
+					carrier: "USPS",
+					destination: { city: "Brooklyn", zip: null }, // optional zip drops
+				},
+			],
+		};
+		expect(buildResponseValue(f, value)).toEqual({
+			shipments: [
+				{ carrier: "USPS", destination: { city: "Brooklyn" } },
+			],
+		});
+	});
 });

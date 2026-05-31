@@ -1,10 +1,14 @@
 import type { ReactNode } from "react";
 import { Eyebrow } from "@/components/eyebrow";
 import type {
+	FormField,
+	ObjectGroupField,
+	RepeatableGroupField,
 	SubformField,
 	TableColumn,
 	TableField,
 } from "@/lib/form-types";
+import { CompactFieldContext } from "./compact-context";
 import { FieldWrapper } from "./field-wrapper";
 
 const cellClass =
@@ -290,4 +294,183 @@ export function SubformRenderer({
 			</div>
 		</FieldWrapper>
 	);
+}
+
+// ─── ObjectGroup (nested Pydantic object) ───────────────────────────
+//
+// Renders as an indented section with the group's label as a small
+// uppercase header. Children dispatch normally at this level — they
+// read/write a nested sub-FormValue keyed by their own `name`. The
+// FieldDispatch case in index.tsx owns the value/onChange scoping.
+
+export function ObjectGroupRenderer({
+	field,
+	children,
+}: {
+	field: ObjectGroupField;
+	children: ReactNode;
+}) {
+	const hasLabel = field.label && field.label.length > 0;
+	return (
+		<div className="space-y-2">
+			{hasLabel && (
+				<div className="pt-2 border-t border-white/10">
+					<Eyebrow weight="semibold" className="block text-white/50">
+						{field.label}
+						{field.required && (
+							<span className="text-red-400 ml-0.5" aria-hidden>
+								*
+							</span>
+						)}
+					</Eyebrow>
+					{field.hint && (
+						<p className="text-white/40 text-xs mt-0.5">{field.hint}</p>
+					)}
+				</div>
+			)}
+			<div className="pl-3 border-l-2 border-white/10 space-y-3">
+				{children}
+			</div>
+		</div>
+	);
+}
+
+// ─── RepeatableGroup (list[BaseModel] → spreadsheet) ────────────────
+//
+// Renders as an editable table. Columns come from item_fields[].label;
+// each row is a dict matching the item_fields shape. Cells dispatch
+// the actual item_field renderer (so a date column is a date picker,
+// a switch column is a switch, etc.), wrapped in CompactFieldContext
+// so the per-field label doesn't duplicate the column header.
+//
+// Reviewer can edit any cell, add new rows via "+ Add row", or remove
+// rows. Min/max constraints from the schema gate the buttons.
+
+type RepeatableRow = Record<string, unknown>;
+
+export function RepeatableGroupRenderer({
+	field,
+	rows,
+	onRowsChange,
+	disabled,
+	renderCell,
+}: {
+	field: RepeatableGroupField;
+	rows: RepeatableRow[];
+	onRowsChange: (next: RepeatableRow[]) => void;
+	disabled?: boolean;
+	renderCell: (
+		row: RepeatableRow,
+		setRow: (next: RepeatableRow) => void,
+		itemField: FormField,
+	) => ReactNode;
+}) {
+	const setRow = (idx: number) => (next: RepeatableRow) => {
+		onRowsChange(rows.map((r, i) => (i === idx ? next : r)));
+	};
+	const addRow = () => onRowsChange([...rows, {}]);
+	const removeRow = (idx: number) =>
+		onRowsChange(rows.filter((_, i) => i !== idx));
+
+	// Column-bearing item fields (the ones the reviewer actually fills).
+	// Layout-only fields (section, divider, image, etc.) don't have a
+	// row-cell shape and would render as a confusing empty cell — filter
+	// them out of the column header AND the row cell list.
+	const columns = field.item_fields.filter((f) => !LAYOUT_AND_DISPLAY_KINDS.has(f.kind));
+
+	const canAdd =
+		!disabled && (field.max_items === null || rows.length < (field.max_items ?? Infinity));
+	const canRemove =
+		!disabled && (field.min_items === null || rows.length > (field.min_items ?? 0));
+
+	return (
+		<FieldWrapper field={field}>
+			<CompactFieldContext.Provider value={true}>
+				{rows.length === 0 ? (
+					<div className="border border-dashed border-white/15 rounded-md px-4 py-6 text-sm text-white/40 text-center">
+						No rows yet — click + Add row to begin.
+					</div>
+				) : (
+					<div className="border border-white/10 rounded-md overflow-x-auto">
+						<table className="w-full">
+							<thead className="bg-white/5 text-xs text-white/60">
+								<tr>
+									{columns.map((col) => (
+										<th
+											key={col.name}
+											className="text-left px-2 py-1.5 whitespace-nowrap"
+										>
+											{col.label || humanizeName(col.name)}
+											{col.required && (
+												<span className="text-red-400 ml-0.5">*</span>
+											)}
+										</th>
+									))}
+									{canRemove && <th className="w-8" aria-label="Remove" />}
+								</tr>
+							</thead>
+							<tbody>
+								{rows.map((row, i) => (
+									<tr key={i} className="border-t border-white/5 align-top">
+										{columns.map((col) => (
+											<td key={col.name} className="p-1 min-w-[8rem]">
+												{renderCell(row, setRow(i), col)}
+											</td>
+										))}
+										{canRemove && (
+											<td className="p-1 text-center align-middle">
+												<button
+													type="button"
+													onClick={() => removeRow(i)}
+													disabled={disabled}
+													aria-label="Remove row"
+													className="text-red-400/70 hover:text-red-400 w-6 h-6"
+												>
+													×
+												</button>
+											</td>
+										)}
+									</tr>
+								))}
+							</tbody>
+						</table>
+					</div>
+				)}
+				{canAdd && (
+					<button
+						type="button"
+						onClick={addRow}
+						className="mt-2 text-sm text-brand hover:underline"
+					>
+						+ Add row
+					</button>
+				)}
+			</CompactFieldContext.Provider>
+		</FieldWrapper>
+	);
+}
+
+// Layout/display kinds that would render as an empty cell inside a
+// repeatable_group row. Mirrors the same set in `index.tsx`'s walk()
+// — duplicated rather than imported because each module owns the
+// concept of "which kinds carry a value."
+const LAYOUT_AND_DISPLAY_KINDS = new Set([
+	"display_text",
+	"image",
+	"video",
+	"pdf_viewer",
+	"html",
+	"section",
+	"divider",
+]);
+
+function humanizeName(name: string): string {
+	// Fallback when a column has no label — turn snake_case_field
+	// into "Snake Case Field" so the reviewer doesn't see a raw
+	// identifier. Managed should always supply labels but defending
+	// against drift here costs nothing.
+	if (!name) return "";
+	return name
+		.replace(/_/g, " ")
+		.replace(/\b\w/g, (c) => c.toUpperCase());
 }

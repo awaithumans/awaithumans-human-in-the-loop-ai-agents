@@ -93,6 +93,31 @@ function cleanLevel(fields: FormField[], value: FormValue): FormValue {
 			continue;
 		}
 
+		// object_group: recurse into the nested sub-FormValue. The
+		// group's `name` carries an object value; children's names live
+		// inside that object. Drop-blank-optionals applies per child.
+		if (f.kind === "object_group") {
+			const sub =
+				v && typeof v === "object" && !Array.isArray(v)
+					? (v as FormValue)
+					: {};
+			out[f.name] = cleanLevel(f.fields, sub);
+			continue;
+		}
+
+		// repeatable_group: array of nested FormValues; recurse per row
+		// using the row shape (item_fields). Drop-blank-optionals
+		// applies per row, per item field — important so an unfilled
+		// optional column on row 3 doesn't fail server-side validation
+		// just because the column was added by + Add row.
+		if (f.kind === "repeatable_group") {
+			const rows = Array.isArray(v) ? v : [];
+			out[f.name] = rows.map((row) =>
+				cleanLevel(f.item_fields, (row ?? {}) as FormValue),
+			);
+			continue;
+		}
+
 		out[f.name] = v;
 	}
 	return out;

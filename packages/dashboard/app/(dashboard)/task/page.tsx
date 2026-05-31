@@ -101,7 +101,14 @@ function TaskDetailPageInner() {
 			setMe(meData);
 
 			if (taskData.form_definition) {
-				setFormData(initialValueFor(taskData.form_definition));
+				// Pass `initial_response` so AwaitVerify Flow A / Flow B
+				// tasks mount the form with the customer's pre-computed
+				// extraction populated. The reviewer verifies/corrects
+				// rather than re-types. Non-AwaitVerify tasks have
+				// `initial_response: null` and the form starts blank.
+				setFormData(
+					initialValueFor(taskData.form_definition, taskData.initial_response),
+				);
 			}
 		} catch (err) {
 			setError(err instanceof Error ? err.message : "Failed to load task");

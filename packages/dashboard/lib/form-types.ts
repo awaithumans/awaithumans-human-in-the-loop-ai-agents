@@ -277,6 +277,32 @@ export type SubformField = BaseField & {
 	remove_label: string;
 };
 
+// ─── Nested Pydantic groups ──────────────────────────────────────────
+//
+// `object_group` and `repeatable_group` are built by the managed-side
+// form-definition builder when the customer's response_schema includes
+// a nested Pydantic model or a `list[BaseModel]`. Pre-PR-C these
+// collapsed to a `long_text` holding raw JSON, which was unusable for
+// non-technical reviewers. The new kinds give the dashboard enough
+// shape to render an indented section (object) or an editable table
+// (list[BaseModel]) without exposing JSON anywhere.
+
+export type ObjectGroupField = BaseField & {
+	kind: "object_group";
+	// Children to render inside the indented section. May contain any
+	// FormField kind, including another object_group or repeatable_group.
+	fields: FormField[];
+};
+
+export type RepeatableGroupField = BaseField & {
+	kind: "repeatable_group";
+	// Shape of a single row. Reviewer adds rows by clicking + Add row;
+	// each new row is an empty {} that fills in defaults per item_field.
+	item_fields: FormField[];
+	min_items: number | null;
+	max_items: number | null;
+};
+
 // ─── Union ───────────────────────────────────────────────────────────
 
 export type FormField =
@@ -306,4 +332,6 @@ export type FormField =
 	| DividerField
 	| SectionCollapseField
 	| TableField
-	| SubformField;
+	| SubformField
+	| ObjectGroupField
+	| RepeatableGroupField;
