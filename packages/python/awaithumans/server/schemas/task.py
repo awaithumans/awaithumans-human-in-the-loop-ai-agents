@@ -37,6 +37,21 @@ class CreateTaskRequest(BaseModel):
             "customer name, business vertical, escalation tier."
         ),
     )
+    # AwaitVerify Flow A / Flow B: a pre-computed extraction of the
+    # document that the reviewer should verify rather than fill from
+    # scratch. The dashboard mounts the form with these values
+    # pre-populated. Shape matches `response_schema`; managed
+    # validates that match before forwarding here, so the OSS server
+    # only asserts JSON-serializability and persists.
+    initial_response: dict[str, Any] | None = Field(
+        default=None,
+        description=(
+            "Optional pre-computed extraction (Flow A / Flow B). The "
+            "reviewer dashboard renders the form with these values "
+            "pre-filled so the human verifies/corrects rather than "
+            "re-types. Null for pure-human review."
+        ),
+    )
 
 
 class CompleteTaskRequest(BaseModel):
@@ -65,6 +80,7 @@ class TaskResponse(BaseModel):
     assigned_to_user_id: str | None = None
     assigned_to_display_name: str | None = None
     assigned_to_slack_user_id: str | None = None
+    initial_response: dict[str, Any] | None = None
     response: dict[str, Any] | None = None
     verifier_result: dict[str, Any] | None = None
     verification_attempt: int = 0

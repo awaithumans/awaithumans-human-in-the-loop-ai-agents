@@ -138,18 +138,29 @@ async def create_task(
     response_schema_json: str,
     priority: str,
     task_metadata: dict[str, str] | None = None,
+    initial_response: dict[str, Any] | None = None,
 ) -> CreatedTask:
-    """POST /api/v1/awaitverify/tasks."""
+    """POST /api/v1/awaitverify/tasks.
+
+    ``initial_response`` carries the customer's prior extraction (Flow A)
+    or the SDK-run extraction output (Flow B) as a JSON payload matching
+    ``response_schema``. Managed validates it server-side and forwards
+    to the OSS reviewer dashboard, which mounts the form with the values
+    pre-populated. Omit (or pass None) for pure-human review.
+    """
     body: dict[str, Any] = {
         "upload_session_id": upload_session_id,
         "task_description": task_description,
         "response_schema_json": response_schema_json,
         "priority": priority,
     }
-    # Only include task_metadata when set so we don't push an
-    # ambiguous null at the managed backend's schema validation.
+    # Only include task_metadata / initial_response when set so the
+    # managed backend's schema validation doesn't see an ambiguous
+    # explicit null where "omitted" is the correct signal.
     if task_metadata:
         body["task_metadata"] = task_metadata
+    if initial_response is not None:
+        body["initial_response"] = initial_response
     data = await _post_json(
         url=f"{managed_url.rstrip('/')}/api/v1/awaitverify/tasks",
         body=body,

@@ -81,6 +81,14 @@ class Task(SQLModel, table=True):
     # coerce values to strings before they arrive.
     task_metadata: dict[str, str] | None = Field(sa_column=Column(JSON), default=None)
 
+    # Pre-computed extraction (AwaitVerify Flow A / Flow B). Optional
+    # JSON snapshot matching `response_schema` shape; the dashboard
+    # mounts the form with these values pre-populated so the reviewer
+    # verifies rather than re-types. Persisted verbatim — managed
+    # validates against `response_schema` before forwarding, so the
+    # OSS server doesn't re-validate.
+    initial_response: dict[str, Any] | None = Field(sa_column=Column(JSON), default=None)
+
     # Response
     response: dict[str, Any] | None = Field(sa_column=Column(JSON), default=None)
 
