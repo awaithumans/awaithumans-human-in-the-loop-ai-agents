@@ -216,18 +216,25 @@ async def verify_document(
             client=client,
         )
 
-    # NOTE: prior_extraction (Flow A) and the Flow B model output
-    # currently get dropped because the managed backend's /tasks body
-    # does not yet accept them. The reviewer dashboard (Phase 3) will
-    # introduce the extracted-payload pass-through. Logging here so
-    # the gap is visible in dev.
-    has_extracted_payload = flow_b_output is not None or prior_extraction is not None
-    if has_extracted_payload:
-        logger.warning(
-            "Flow A/B extracted output is not yet forwarded to the managed "
-            "backend (Phase 3 work). The human reviewer will verify from "
-            "scratch in v1."
-        )
+    # Resolve the chosen extraction. Flow A and Flow B are mutually
+    # exclusive (the combo is rejected at lines 208-211 above), so at
+    # most one of these is non-None. Flow A delivers a Pydantic model
+    # — `model_dump(mode="json")` so nested datetime/UUID/Enum values
+    # serialize through to JSON cleanly. Flow B's `flow_b_output` is
+    # already a dict from `run_extraction()`, validated against
+    # response_schema there.
+    #
+    # The managed backend validates `initial_response` against the
+    # task's `response_schema` before forwarding to the OSS reviewer
+    # dashboard, which mounts the form with the values pre-populated
+    # so the reviewer verifies/corrects rather than re-types.
+    initial_response: dict[str, Any] | None
+    if prior_extraction is not None:
+        initial_response = prior_extraction.model_dump(mode="json")
+    elif flow_b_output is not None:
+        initial_response = flow_b_output
+    else:
+        initial_response = None
 
     # ── Fragment client-side ────────────────────────────────────────
     page_fragments = fragment_document(raw)
@@ -295,6 +302,7 @@ async def verify_document(
         response_schema_json=response_schema_json,
         priority=resolved_priority.value,
         task_metadata=task_metadata,
+        initial_response=initial_response,
     )
 
     logger.info(

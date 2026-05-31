@@ -131,6 +131,7 @@ def _stub_managed_calls(
         response_schema_json: str,
         priority: str,
         task_metadata: dict[str, str] | None = None,
+        initial_response: dict[str, Any] | None = None,
     ) -> Any:
         from awaithumans.awaitverify._managed_client import CreatedTask
 
@@ -142,6 +143,7 @@ def _stub_managed_calls(
             "response_schema_json": response_schema_json,
             "priority": priority,
             "task_metadata": task_metadata,
+            "initial_response": initial_response,
         }
         return CreatedTask(
             task_id="task-id-fake",
@@ -184,8 +186,7 @@ class TestAwaitHumansClient:
     def test_managed_url_default(self) -> None:
         client = AwaitHumans(api_key="ah_sk_test")
         assert client.managed_url == (
-            "https://awaithumans-managed.icyflower-6900d175.westus3."
-            "azurecontainerapps.io"
+            "https://awaithumans-managed.icyflower-6900d175.westus3.azurecontainerapps.io"
         )
 
     def test_managed_url_override(self) -> None:
@@ -383,3 +384,175 @@ class TestRejectsBothFlowAandFlowB:
                 prior_extraction=_Extraction(codes=["T12C3"]),
                 extraction=OpenAIExtraction(model="gpt-4o", prompt="extract"),
             )
+
+
+class TestInitialResponseForwarding:
+    """The Phase-3 drop guard is gone — Flow A's prior_extraction and
+    Flow B's extraction output now both flow through to managed as
+    ``initial_response`` so the reviewer dashboard can pre-populate
+    the form. Pin all three branches (Flow A, Flow B, neither).
+    """
+
+    @pytest.mark.asyncio
+    async def test_flow_a_prior_extraction_forwarded_as_initial_response(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        """Flow A: ``prior_extraction`` (a Pydantic model) is dumped to
+        a dict and lands in the managed POST as ``initial_response``.
+
+        The serialization MUST go through ``model_dump(mode="json")``
+        so any nested datetime/UUID/Enum value in the customer's
+        extraction class comes through as JSON-safe primitives. Test
+        with a simple list[str] to keep the assertion legible; the
+        ``mode="json"`` discipline is documented in the source.
+        """
+        captured = _stub_managed_calls(monkeypatch, completed_response={"ok": True})
+        png_path = tmp_path / "doc.png"
+        png_path.write_bytes(_png_bytes())
+
+        client = AwaitHumans(api_key="ah_sk_test")
+        await client.verify_document(
+            task_description="check",
+            response_schema=_StubResponse,
+            document_path=png_path,
+            prior_extraction=_Extraction(codes=["A12", "B34"]),
+        )
+
+        assert captured["task_request"]["initial_response"] == {"codes": ["A12", "B34"]}, (
+            "prior_extraction must be serialized to a JSON dict and forwarded; "
+            f"got: {captured['task_request']['initial_response']!r}"
+        )
+
+    @pytest.mark.asyncio
+    async def test_flow_b_extraction_output_forwarded_as_initial_response(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        """Flow B: SDK runs the extraction locally and forwards the
+        dict result as ``initial_response``. We stub ``run_extraction``
+        so the test doesn't hit a real OpenAI/Reducto/etc. endpoint.
+
+        The dict output of run_extraction is already validated against
+        ``response_schema`` inside that function, so the SDK passes it
+        through verbatim — no second serialization pass.
+        """
+        captured = _stub_managed_calls(monkeypatch, completed_response={"ok": True})
+
+        async def fake_run_extraction(*args: Any, **kwargs: Any) -> dict[str, Any]:
+            # Caller-supplied schema-shaped dict.
+            return {"codes": ["from-flow-b"]}
+
+        monkeypatch.setattr(client_mod, "run_extraction", fake_run_extraction)
+
+        png_path = tmp_path / "doc.png"
+        png_path.write_bytes(_png_bytes())
+
+        client = AwaitHumans(api_key="ah_sk_test", openai=OpenAI(api_key="sk-test"))
+        await client.verify_document(
+            task_description="check",
+            response_schema=_StubResponse,
+            document_path=png_path,
+            extraction=OpenAIExtraction(model="gpt-4o", prompt="extract"),
+        )
+
+        assert captured["task_request"]["initial_response"] == {"codes": ["from-flow-b"]}
+
+    @pytest.mark.asyncio
+    async def test_no_extraction_sends_null_initial_response(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        """Pure-human review path: neither flow set → managed sees
+        ``initial_response=None``, and the wire body omits the key
+        (verified separately at the ``_managed_client.create_task``
+        level since the stub here doesn't probe the wire body).
+        """
+        captured = _stub_managed_calls(monkeypatch, completed_response={"ok": True})
+        png_path = tmp_path / "doc.png"
+        png_path.write_bytes(_png_bytes())
+
+        client = AwaitHumans(api_key="ah_sk_test")
+        await client.verify_document(
+            task_description="check",
+            response_schema=_StubResponse,
+            document_path=png_path,
+        )
+
+        assert captured["task_request"]["initial_response"] is None
+
+
+class TestManagedCreateTaskWireBody:
+    """Unit tests for the ``_managed_client.create_task`` helper itself,
+    focused on what the wire body actually contains. The SDK-level
+    tests above capture the captured kwargs of a stub; these tests
+    inspect the JSON body that goes over HTTP, which is the contract
+    the managed backend reads.
+    """
+
+    @pytest.mark.asyncio
+    async def test_initial_response_present_in_body_when_set(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from awaithumans.awaitverify import _managed_client
+
+        captured: dict[str, Any] = {}
+
+        async def fake_post_json(
+            *, url: str, body: dict[str, Any], api_key: str | None
+        ) -> dict[str, Any]:
+            captured["body"] = body
+            return {
+                "task_id": "t-1",
+                "upload_session_id": "u-1",
+                "status": "awaiting_review",
+            }
+
+        monkeypatch.setattr(_managed_client, "_post_json", fake_post_json)
+
+        await _managed_client.create_task(
+            managed_url="http://m",
+            api_key="k",
+            upload_session_id="u-1",
+            task_description="d",
+            response_schema_json="{}",
+            priority="standard",
+            initial_response={"codes": ["X"]},
+        )
+
+        assert captured["body"]["initial_response"] == {"codes": ["X"]}
+
+    @pytest.mark.asyncio
+    async def test_initial_response_omitted_from_body_when_none(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """When ``initial_response`` is None, the key must be absent
+        from the wire body — not present-with-null. Managed treats
+        "absent" as "no prior extraction"; an explicit null could be
+        read as "the customer ran extraction and got null", which
+        means something different to the form-prefill logic.
+        """
+        from awaithumans.awaitverify import _managed_client
+
+        captured: dict[str, Any] = {}
+
+        async def fake_post_json(
+            *, url: str, body: dict[str, Any], api_key: str | None
+        ) -> dict[str, Any]:
+            captured["body"] = body
+            return {
+                "task_id": "t-1",
+                "upload_session_id": "u-1",
+                "status": "awaiting_review",
+            }
+
+        monkeypatch.setattr(_managed_client, "_post_json", fake_post_json)
+
+        await _managed_client.create_task(
+            managed_url="http://m",
+            api_key="k",
+            upload_session_id="u-1",
+            task_description="d",
+            response_schema_json="{}",
+            priority="standard",
+            initial_response=None,
+        )
+
+        assert "initial_response" not in captured["body"]
