@@ -37,7 +37,7 @@ from datetime import datetime
 from sqlalchemy import Index, LargeBinary
 from sqlmodel import Column, Field, SQLModel
 
-from awaithumans.server.db.models.base import new_id, utc_now
+from awaithumans.server.db.models.base import new_id, tz_timestamp_column, utc_now
 
 
 class WebhookDeliveryStatus(str, enum.Enum):
@@ -76,16 +76,36 @@ class WebhookDelivery(SQLModel, table=True):
 
     status: WebhookDeliveryStatus = Field(default=WebhookDeliveryStatus.PENDING)
 
-    # Bookkeeping for the retry loop.
+    # Bookkeeping for the retry loop. Timestamp columns are
+    # tz-aware so the scheduler's `next_attempt_at <= now` comparison
+    # against `datetime.now(timezone.utc)` doesn't trip asyncpg.
+    # The composite (status, next_attempt_at) index lives in
+    # `__table_args__` below, so we don't add a single-column index
+    # here even though next_attempt_at is hot-path.
     attempt_count: int = Field(default=0)
-    next_attempt_at: datetime = Field(default_factory=utc_now)
-    first_attempted_at: datetime | None = Field(default=None)
-    last_attempt_at: datetime | None = Field(default=None)
+    next_attempt_at: datetime = Field(
+        default_factory=utc_now,
+        sa_column=tz_timestamp_column(),
+    )
+    first_attempted_at: datetime | None = Field(
+        default=None,
+        sa_column=tz_timestamp_column(nullable=True),
+    )
+    last_attempt_at: datetime | None = Field(
+        default=None,
+        sa_column=tz_timestamp_column(nullable=True),
+    )
     last_error: str | None = Field(default=None)
     last_status_code: int | None = Field(default=None)
 
-    created_at: datetime = Field(default_factory=utc_now)
-    updated_at: datetime = Field(default_factory=utc_now)
+    created_at: datetime = Field(
+        default_factory=utc_now,
+        sa_column=tz_timestamp_column(),
+    )
+    updated_at: datetime = Field(
+        default_factory=utc_now,
+        sa_column=tz_timestamp_column(),
+    )
 
     __table_args__ = (
         # Composite index for the scheduler's hot-path scan.

@@ -7,7 +7,7 @@ from typing import Any
 
 from sqlmodel import JSON, Column, Field, SQLModel
 
-from awaithumans.server.db.models.base import new_id, utc_now
+from awaithumans.server.db.models.base import new_id, tz_timestamp_column, utc_now
 
 
 class AuditEntry(SQLModel, table=True):
@@ -44,4 +44,7 @@ class AuditEntry(SQLModel, table=True):
     embed_jti: str | None = Field(default=None, max_length=64)
 
     # When
-    created_at: datetime = Field(default_factory=utc_now)
+    created_at: datetime = Field(
+        default_factory=utc_now,
+        sa_column=tz_timestamp_column(),
+    )

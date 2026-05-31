@@ -27,7 +27,7 @@ from datetime import datetime
 from sqlalchemy import Index, text
 from sqlmodel import Field, SQLModel
 
-from awaithumans.server.db.models.base import new_id, utc_now
+from awaithumans.server.db.models.base import new_id, tz_timestamp_column, utc_now
 
 
 class User(SQLModel, table=True):
@@ -58,11 +58,20 @@ class User(SQLModel, table=True):
     # new hires get picked ahead of veterans (correct default — their
     # queue is empty). Updated transactionally when the router picks
     # this user.
-    last_assigned_at: datetime | None = Field(default=None)
+    last_assigned_at: datetime | None = Field(
+        default=None,
+        sa_column=tz_timestamp_column(nullable=True),
+    )
 
     # ── Timestamps ───────────────────────────────────────────────────
-    created_at: datetime = Field(default_factory=utc_now)
-    updated_at: datetime = Field(default_factory=utc_now)
+    created_at: datetime = Field(
+        default_factory=utc_now,
+        sa_column=tz_timestamp_column(),
+    )
+    updated_at: datetime = Field(
+        default_factory=utc_now,
+        sa_column=tz_timestamp_column(),
+    )
 
     __table_args__ = (
         # Email unique across rows that actually have one.

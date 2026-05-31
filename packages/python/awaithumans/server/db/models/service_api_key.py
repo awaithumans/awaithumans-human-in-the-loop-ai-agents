@@ -22,6 +22,8 @@ from datetime import datetime
 
 from sqlmodel import Field, SQLModel
 
+from awaithumans.server.db.models.base import tz_timestamp_column
+
 
 class ServiceAPIKey(SQLModel, table=True):
     """One row per `ah_sk_*` key that can mint embed tokens."""
@@ -32,6 +34,17 @@ class ServiceAPIKey(SQLModel, table=True):
     name: str = Field(max_length=80)
     key_hash: str = Field(unique=True, max_length=64)
     key_prefix: str = Field(max_length=12)
-    created_at: datetime
-    last_used_at: datetime | None = None
-    revoked_at: datetime | None = None
+    # Already tz-aware in the original alembic migration (20260508_0510),
+    # so prod deploys don't need the startup patch to repair this table.
+    # We still declare timezone=True at the model level for consistency:
+    # tests using `metadata.create_all` then produce tz-aware columns
+    # too, matching what the migration created in prod.
+    created_at: datetime = Field(sa_column=tz_timestamp_column())
+    last_used_at: datetime | None = Field(
+        default=None,
+        sa_column=tz_timestamp_column(nullable=True),
+    )
+    revoked_at: datetime | None = Field(
+        default=None,
+        sa_column=tz_timestamp_column(nullable=True),
+    )

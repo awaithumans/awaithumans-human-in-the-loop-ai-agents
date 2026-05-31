@@ -8,7 +8,7 @@ from typing import Any
 from sqlalchemy import Index, text
 from sqlmodel import JSON, Column, Field, SQLModel
 
-from awaithumans.server.db.models.base import new_id, utc_now
+from awaithumans.server.db.models.base import new_id, tz_timestamp_column, utc_now
 from awaithumans.types import TaskStatus
 from awaithumans.utils.constants import TERMINAL_STATUSES_SET
 
@@ -79,9 +79,7 @@ class Task(SQLModel, table=True):
     # numbers / arrays / objects supplied here are still accepted
     # at the DB layer (SQLite is permissive), but the SDK + schema
     # coerce values to strings before they arrive.
-    task_metadata: dict[str, str] | None = Field(
-        sa_column=Column(JSON), default=None
-    )
+    task_metadata: dict[str, str] | None = Field(sa_column=Column(JSON), default=None)
 
     # Response
     response: dict[str, Any] | None = Field(sa_column=Column(JSON), default=None)
@@ -95,14 +93,29 @@ class Task(SQLModel, table=True):
     timeout_seconds: int
     redact_payload: bool = Field(default=False)
 
-    # Timestamps
-    created_at: datetime = Field(default_factory=utc_now)
-    updated_at: datetime = Field(default_factory=utc_now)
-    completed_at: datetime | None = Field(default=None)
-    timed_out_at: datetime | None = Field(default=None)
+    # Timestamps. All use `TIMESTAMP WITH TIME ZONE` via
+    # tz_timestamp_column so the timeout-scheduler query
+    # `Task.timeout_at <= datetime.now(timezone.utc)` doesn't trip
+    # asyncpg's naive-vs-aware bind check on Postgres.
+    created_at: datetime = Field(
+        default_factory=utc_now,
+        sa_column=tz_timestamp_column(),
+    )
+    updated_at: datetime = Field(
+        default_factory=utc_now,
+        sa_column=tz_timestamp_column(),
+    )
+    completed_at: datetime | None = Field(
+        default=None,
+        sa_column=tz_timestamp_column(nullable=True),
+    )
+    timed_out_at: datetime | None = Field(
+        default=None,
+        sa_column=tz_timestamp_column(nullable=True),
+    )
     timeout_at: datetime | None = Field(
         default=None,
-        index=True,
+        sa_column=tz_timestamp_column(nullable=True, index=True),
         description="Pre-computed: created_at + timeout_seconds. Used by timeout scheduler.",
     )
 

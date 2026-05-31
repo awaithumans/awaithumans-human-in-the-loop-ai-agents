@@ -22,7 +22,7 @@ from datetime import datetime
 
 from sqlmodel import Field, SQLModel
 
-from awaithumans.server.db.models.base import utc_now
+from awaithumans.server.db.models.base import tz_timestamp_column, utc_now
 
 
 class ConsumedEmailToken(SQLModel, table=True):
@@ -31,4 +31,7 @@ class ConsumedEmailToken(SQLModel, table=True):
     __tablename__ = "consumed_email_tokens"
 
     jti: str = Field(primary_key=True, max_length=64)
-    consumed_at: datetime = Field(default_factory=utc_now)
+    consumed_at: datetime = Field(
+        default_factory=utc_now,
+        sa_column=tz_timestamp_column(),
+    )
