@@ -35,6 +35,7 @@ In dev (`awaithumans dev`), the CLI auto-generates these for you and writes the 
 |---|---|---|
 | `AWAITHUMANS_DATABASE_URL` | (none) | Full Postgres URL. Overrides the SQLite default. |
 | `AWAITHUMANS_DB_PATH` | `.awaithumans/dev.db` (dev only) | SQLite file path. Used when `DATABASE_URL` is unset. |
+| `AWAITHUMANS_ALLOW_EPHEMERAL_DB` | `false` | Acknowledges that SQLite-in-production is intentional. Suppresses the durability warning. See "Ephemeral SQLite warning" below. |
 
 ```bash
 # SQLite (dev / single-user)
@@ -45,6 +46,17 @@ AWAITHUMANS_DATABASE_URL=postgresql://user:pass@host:5432/dbname
 ```
 
 The `.awaithumans/dev.db` default is **only honored by `awaithumans dev`** (the local development CLI). `awaithumans serve` (the production entrypoint, and the default Docker CMD) refuses to start unless one of `AWAITHUMANS_DATABASE_URL` or `AWAITHUMANS_DB_PATH` is set explicitly — this prevents the silent-data-loss footgun where a container restart on an ephemeral filesystem wipes the SQLite file.
+
+### Ephemeral SQLite warning
+
+When `AWAITHUMANS_ENVIRONMENT=production` and the server is on SQLite (either via `AWAITHUMANS_DB_PATH` or an explicit `sqlite://` `DATABASE_URL`), the lifespan emits a loud multi-line WARNING explaining the data-loss risk and pointing at the two fixes. In most container runtimes — Azure Container Apps, plain Docker without `-v`, k8s without a PVC, Render free tier — the SQLite path lives on an ephemeral overlay filesystem. Every container restart wipes the task store and the audit trail, silently.
+
+To resolve:
+
+- **Move to Postgres** (recommended for any deployment you care about): set `AWAITHUMANS_DATABASE_URL=postgresql://...`.
+- **Confirm the SQLite path is durable** in your runtime's terms (a mounted volume, a PersistentVolumeClaim, an Azure Files share, etc.). The Dockerfile declares `VOLUME ["/var/lib/awaithumans"]`, but several runtimes ignore that directive — don't trust it as the only line of defense.
+
+Once durability is confirmed, set `AWAITHUMANS_ALLOW_EPHEMERAL_DB=true` to acknowledge the configuration and suppress the warning. An audit-level INFO record is still emitted so the decision shows up in logs.
 
 ## Server
 
