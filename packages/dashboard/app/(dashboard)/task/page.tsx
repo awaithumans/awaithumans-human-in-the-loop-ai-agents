@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ChevronDown } from "lucide-react";
 import {
@@ -34,6 +34,7 @@ import {
 	type FormValue,
 } from "@/components/form-renderer";
 import { SubmittedResponse } from "@/components/submitted-response";
+import { applyOptimisticRedaction } from "./optimistic-redact";
 
 /**
  * Route is query-param (`/task?id=...`) rather than dynamic segment
@@ -67,6 +68,20 @@ function TaskDetailPageInner() {
 		new Set(),
 	);
 
+	// Sticky flag: once the reviewer has submitted a task with
+	// `redact_response_after_submit=true`, every subsequent loadTask
+	// re-applies the redaction overlay locally — even before the
+	// server-side webhook dispatcher has fired the callback and
+	// stamped `response_redacted_at`. The flag is a `useRef` (not
+	// state) because flipping it shouldn't trigger a re-render; the
+	// next setTask call already does that.
+	//
+	// Lives for the lifetime of the page mount. Navigating away and
+	// back is a fresh mount that re-fetches and reads the server's
+	// canonical redaction state — by then the scheduler will have
+	// caught up in practice.
+	const submittedWithRedaction = useRef(false);
+
 	const toggleAuditEntry = (id: string) => {
 		setExpandedAuditIds((prev) => {
 			const next = new Set(prev);
@@ -97,7 +112,18 @@ function TaskDetailPageInner() {
 				fetchAuditTrail(taskId).catch(() => []),
 				fetchMe().catch(() => null),
 			]);
-			setTask(taskData);
+			// Carry forward client-side optimistic redaction. The
+			// server's response_redacted_at is the source of truth
+			// when it arrives, but until the webhook dispatcher fires
+			// the callback (which can lag the submit by seconds) the
+			// server still has the typed response. Re-apply the
+			// overlay so the reviewer never sees the content come
+			// back between submit and the dispatcher's tick.
+			const displayTask =
+				submittedWithRedaction.current && !taskData.response_redacted_at
+					? applyOptimisticRedaction(taskData)
+					: taskData;
+			setTask(displayTask);
 			setAudit(auditData);
 			setMe(meData);
 
@@ -132,6 +158,28 @@ function TaskDetailPageInner() {
 				response: responseBody,
 				completed_via_channel: "dashboard",
 			});
+
+			// AwaitVerify: when the task carries the redaction flag,
+			// flip to the "Response delivered" placeholder
+			// immediately — within the same render tick as the 2xx
+			// from the submit endpoint. The server-side redaction
+			// fires later (on callback dispatch), so without this
+			// the typed values would stay visible for the seconds
+			// between submit and the webhook scheduler's next tick.
+			// Sticky ref ensures the loadTask below re-applies the
+			// overlay if the server-side timestamp hasn't landed yet.
+			if (task.redact_response_after_submit) {
+				submittedWithRedaction.current = true;
+				setTask((prev) =>
+					prev ? applyOptimisticRedaction(prev) : prev,
+				);
+				// Clear the typed values from local state so no
+				// sibling component holds a copy in memory. The form
+				// itself is about to unmount (canSubmitResponse goes
+				// false once status flips to "completed").
+				setFormData({});
+			}
+
 			await loadTask();
 		} catch (err) {
 			setError(err instanceof Error ? err.message : "Failed to submit");
