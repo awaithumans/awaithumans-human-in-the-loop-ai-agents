@@ -22,12 +22,15 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Eyebrow } from "@/components/eyebrow";
 import type { ImageField } from "@/lib/form-types";
+import { ImageLightbox } from "./image-lightbox";
+import { ProtectedImage } from "./protected-image";
 
 type Zoom = "fit" | "actual";
 
 export function ImageCarousel({ images }: { images: ImageField[] }) {
 	const [index, setIndex] = useState(0);
 	const [zoom, setZoom] = useState<Zoom>("fit");
+	const [lightboxOpen, setLightboxOpen] = useState(false);
 	const containerRef = useRef<HTMLDivElement>(null);
 
 	const count = images.length;
@@ -44,8 +47,13 @@ export function ImageCarousel({ images }: { images: ImageField[] }) {
 
 	// Keyboard navigation. Global listener, but skip when a text input
 	// has focus — the reviewer typing into the form's response fields
-	// should not shuffle pages. Reset zoom on Esc.
+	// should not shuffle pages. Reset zoom on Esc. While the lightbox
+	// is open, the lightbox owns keyboard handling (it has its own
+	// listener for ← / → / Esc) — bail out here so we don't dispatch
+	// twice or have the carousel react to Esc and dismiss zoom while
+	// the lightbox is also reacting to Esc to close.
 	useEffect(() => {
+		if (lightboxOpen) return;
 		function onKey(e: KeyboardEvent) {
 			const target = e.target as HTMLElement | null;
 			if (
@@ -68,7 +76,7 @@ export function ImageCarousel({ images }: { images: ImageField[] }) {
 		}
 		window.addEventListener("keydown", onKey);
 		return () => window.removeEventListener("keydown", onKey);
-	}, [goPrev, goNext]);
+	}, [goPrev, goNext, lightboxOpen]);
 
 	// Reset zoom when the slide changes — operators expect a fresh
 	// view per page; carrying "actual" across slides leaves the next
@@ -96,8 +104,7 @@ export function ImageCarousel({ images }: { images: ImageField[] }) {
 						: "rounded-md border border-white/10 bg-black/20 max-h-[640px] overflow-auto"
 				}
 			>
-				{/* eslint-disable-next-line @next/next/no-img-element */}
-				<img
+				<ProtectedImage
 					key={current.url}
 					src={current.url}
 					alt={current.alt ?? current.label ?? `Image ${index + 1} of ${count}`}
@@ -137,21 +144,40 @@ export function ImageCarousel({ images }: { images: ImageField[] }) {
 					</span>
 				</div>
 
-				<button
-					type="button"
-					onClick={() =>
-						setZoom((z) => (z === "fit" ? "actual" : "fit"))
-					}
-					className="px-3 py-1 rounded-md border border-white/10 text-white/70 hover:text-white hover:border-white/30"
-					aria-label={
-						zoom === "fit"
-							? "Switch to actual size"
-							: "Switch to fit"
-					}
-				>
-					{zoom === "fit" ? "Actual size" : "Fit"}
-				</button>
+				<div className="flex items-center gap-1">
+					<button
+						type="button"
+						onClick={() =>
+							setZoom((z) => (z === "fit" ? "actual" : "fit"))
+						}
+						className="px-3 py-1 rounded-md border border-white/10 text-white/70 hover:text-white hover:border-white/30"
+						aria-label={
+							zoom === "fit"
+								? "Switch to actual size"
+								: "Switch to fit"
+						}
+					>
+						{zoom === "fit" ? "Actual size" : "Fit"}
+					</button>
+					<button
+						type="button"
+						onClick={() => setLightboxOpen(true)}
+						className="px-3 py-1 rounded-md border border-white/10 text-white/70 hover:text-white hover:border-white/30"
+						aria-label="Open full screen"
+					>
+						⛶ Full screen
+					</button>
+				</div>
 			</div>
+
+			{lightboxOpen && (
+				<ImageLightbox
+					images={images}
+					index={index}
+					onClose={() => setLightboxOpen(false)}
+					onIndexChange={setIndex}
+				/>
+			)}
 		</div>
 	);
 }

@@ -13,6 +13,7 @@ import type {
 	VideoField,
 } from "@/lib/form-types";
 import { FieldWrapper } from "./field-wrapper";
+import { ProtectedImage } from "./protected-image";
 
 // ─── FileUpload ──────────────────────────────────────────────────────
 
@@ -242,8 +243,7 @@ export function ImageDisplayRenderer({ field }: { field: ImageField }) {
 					{field.label}
 				</Eyebrow>
 			)}
-			{/* eslint-disable-next-line @next/next/no-img-element */}
-			<img
+			<ProtectedImage
 				src={field.url}
 				alt={field.alt ?? field.label ?? ""}
 				width={field.width ?? undefined}
