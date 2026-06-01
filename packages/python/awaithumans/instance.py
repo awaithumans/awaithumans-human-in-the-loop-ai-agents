@@ -55,7 +55,7 @@ class AwaitHumans:
         managed_url: Base URL of the AwaitVerify managed backend, used
             by `verify_document` calls. Falls back to
             AWAITHUMANS_MANAGED_URL or the hosted default
-            (`https://api.awaithumans.com`).
+            (`https://api.awaithumans.dev`).
         openai: Optional OpenAI credentials for Flow B. The customer's
             key is used locally; it never reaches AwaitVerify.
         anthropic: Optional Anthropic (Claude) credentials.
@@ -84,7 +84,7 @@ class AwaitHumans:
         # Production managed endpoint. Customers can override per
         # instance via `managed_url=` or per process via the
         # AWAITHUMANS_MANAGED_URL env var. When we later cut over a
-        # custom domain (`api.awaithumans.com`), update this default
+        # custom domain (`api.awaithumans.dev`), update this default
         # in one place and ship a minor release.
         self.managed_url = (
             managed_url

@@ -69,7 +69,7 @@ class ManagedBackendError(VerifyError):
                 "  - 401/403: check the api_key on your AwaitHumans client.\n"
                 "  - 404: the upload session or task id was not recognized.\n"
                 "  - 422: a request field failed validation — check the response body.\n"
-                "  - 5xx: transient — retry or check status.awaithumans.com."
+                "  - 5xx: transient — retry or check status.awaithumans.dev."
             ),
             docs_url="https://docs.awaithumans.dev/awaitverify/errors",
         )
