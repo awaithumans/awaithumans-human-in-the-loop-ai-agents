@@ -72,14 +72,68 @@ class TestMaskRegions:
         # Their union is the whole height
         assert bottom3 == top4
 
-    def test_no_single_region_covers_whole_page(self) -> None:
+    def test_no_single_region_covers_more_than_half_the_page(self) -> None:
+        """Symmetry invariant: every mask blacks out AT MOST 50% of the
+        page area. A reviewer mentally re-assembles the document by
+        scanning across fragments, so each fragment must leak roughly
+        the same amount — pre-fix, mask 1 blacked out 75% (only the
+        right quarter visible) which was both inconsistent with the
+        other four and visually dominated the carousel.
+
+        Tightened from the prior ``<= 75%`` tolerance specifically so
+        an asymmetric mask can't sneak back in. If a future change
+        introduces a wider mask, this test fails loudly.
+        """
         regions = _mask_regions(width=200, height=100)
         whole_area = 200 * 100
-        for left, top, right, bottom in regions:
+        for i, (left, top, right, bottom) in enumerate(regions):
             area = (right - left) * (bottom - top)
-            # Half the page (or smaller) is the design intent. No
-            # fragment should hide everything.
-            assert area <= whole_area // 2 + (whole_area // 4)
+            assert area <= whole_area // 2, (
+                f"mask {i} blacks out {area} px² of a {whole_area} px² "
+                f"page ({100 * area // whole_area}%) — design contract "
+                "is ≤ 50% per mask"
+            )
+
+    def test_left_and_right_half_masks_are_mirror_images(self) -> None:
+        """Mask 0 (right half hidden) and mask 1 (left half hidden) must
+        produce mirror-image fragments — same area, complementary
+        coverage. Pre-fix, mask 1 used ``three_quarter_w`` which made
+        the right-half fragment leak only 25% instead of 50%.
+        """
+        regions = _mask_regions(width=200, height=100)
+        left_half_mask = regions[0]
+        right_half_mask = regions[1]
+
+        left_area = (left_half_mask[2] - left_half_mask[0]) * (
+            left_half_mask[3] - left_half_mask[1]
+        )
+        right_area = (right_half_mask[2] - right_half_mask[0]) * (
+            right_half_mask[3] - right_half_mask[1]
+        )
+        assert left_area == right_area, (
+            f"left-half mask ({left_area}) and right-half mask ({right_area}) must have equal area"
+        )
+
+        # Together they should partition the page horizontally with
+        # no overlap and no gap.
+        assert left_half_mask == (100, 0, 200, 100)  # right half blacked
+        assert right_half_mask == (0, 0, 100, 100)  # left half blacked
+
+    def test_top_and_bottom_half_masks_are_mirror_images(self) -> None:
+        """Sibling assertion to the horizontal-half test: vertical
+        siblings (top half hidden vs bottom half hidden) are also
+        mirror-image. Catches a regression where someone "fixes" the
+        horizontal pair but breaks the vertical one.
+        """
+        regions = _mask_regions(width=200, height=100)
+        top_blacked = regions[3]
+        bottom_blacked = regions[4]
+
+        top_area = (top_blacked[2] - top_blacked[0]) * (top_blacked[3] - top_blacked[1])
+        bottom_area = (bottom_blacked[2] - bottom_blacked[0]) * (
+            bottom_blacked[3] - bottom_blacked[1]
+        )
+        assert top_area == bottom_area
 
 
 class TestFragmentDocument:
