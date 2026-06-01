@@ -179,6 +179,7 @@ async def create_task_route(
         callback_url=body.callback_url,
         task_metadata=body.task_metadata,
         initial_response=body.initial_response,
+        redact_response_after_submit=body.redact_response_after_submit,
     )
 
     # Replay header: clients that care about distinguishing fresh

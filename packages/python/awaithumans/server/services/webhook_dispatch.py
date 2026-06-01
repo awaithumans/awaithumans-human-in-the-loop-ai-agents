@@ -250,6 +250,43 @@ def _too_old(delivery: WebhookDelivery, now: datetime) -> bool:
     return age.total_seconds() >= WEBHOOK_RETRY_MAX_AGE_SECONDS
 
 
+async def _redact_response_if_requested(
+    session: AsyncSession,
+    task_id: str,
+    now: datetime,
+) -> None:
+    """Clear the task's response if ``redact_response_after_submit=True``.
+
+    Called from the success branch of ``_record_outcome`` after a
+    successful callback delivery. Idempotent on retries — once
+    ``response_redacted_at`` is non-null we skip (a duplicate redaction
+    would also be safe since we'd just overwrite null with null, but
+    skipping keeps the timestamp at the first successful delivery and
+    avoids a redundant DB write).
+
+    No-op when the task doesn't request redaction OR has already been
+    redacted. No-op when the task lookup misses (defensive — should
+    never happen since the delivery row has a foreign key, but a
+    stray delete-task between delivery and outcome would land here
+    and we'd rather skip cleanly than 500).
+    """
+    result = await session.execute(select(Task).where(Task.id == task_id))
+    task = result.scalar_one_or_none()
+    if task is None:
+        return
+    if not task.redact_response_after_submit:
+        return
+    if task.response_redacted_at is not None:
+        return
+    task.response = None
+    task.response_redacted_at = now
+    session.add(task)
+    logger.info(
+        "Response redacted task=%s (callback delivered, redact_response_after_submit=true)",
+        task_id,
+    )
+
+
 async def _record_outcome(
     session: AsyncSession,
     delivery: WebhookDelivery,
@@ -277,6 +314,20 @@ async def _record_outcome(
             delivery.attempt_count,
             status_code or 0,
         )
+        # AwaitVerify response redaction: the callback URL is the
+        # canonical destination for the response. Once the customer's
+        # endpoint has acknowledged receipt with a 2xx, the dashboard
+        # has no reason to keep the response content around — clear
+        # ``response`` and stamp ``response_redacted_at`` so the
+        # read-back switches to the "delivered" placeholder. We fetch
+        # the Task on the same session so the redaction commits
+        # atomically with the delivery row update.
+        #
+        # Audit-log entries for "callback delivered" are NOT touched
+        # — operators still need to know that the callback fired,
+        # just not its content. The audit log doesn't store the
+        # response body anyway; it carries metadata only.
+        await _redact_response_if_requested(session, delivery.task_id, now)
     elif _too_old(delivery, now):
         delivery.status = WebhookDeliveryStatus.ABANDONED
         logger.error(

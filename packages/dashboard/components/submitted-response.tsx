@@ -3,21 +3,22 @@
 /**
  * Read-only view of a task's submitted response.
  *
- * Pre-PR, the task page rendered the response as `Object.entries`
- * with `String(value)` per value, which JavaScript happily coerces
- * to "[object Object]" for any nested object or array. Reviewers
- * submitting a nested response (a list[BaseModel], an object_group)
- * saw broken text immediately after clicking Submit.
+ * Three render paths:
  *
- * Two render paths:
+ *   1. **Redacted (AwaitVerify post-callback).** When
+ *      ``responseRedactedAt`` is non-null, the server has cleared the
+ *      response from the DB after delivering it to the customer's
+ *      callback URL. The dashboard renders a "Response delivered"
+ *      placeholder instead — the customer's process is the canonical
+ *      destination for the data; the audit log retains the metadata.
  *
- *   1. **With form_definition (primary).** Mount the same
+ *   2. **With form_definition (primary).** Mount the same
  *      ``FormRenderer`` the reviewer used to fill the form, with
  *      ``disabled={true}`` so every input is read-only. This stays
  *      in sync with the write side automatically — new field kinds
  *      land in one place and the read-back gets them for free.
  *
- *   2. **Without form_definition (fallback).** Some tasks predate
+ *   3. **Without form_definition (fallback).** Some tasks predate
  *      form_definition (programmatic tasks created via raw
  *      ``await_human`` without a Pydantic response_schema) so a
  *      ``FormDefinition`` may be null on the wire. In that case we
@@ -32,11 +33,30 @@ import { FormRenderer } from "@/components/form-renderer";
 import type { FormDefinition } from "@/lib/form-types";
 
 type Props = {
-	response: Record<string, unknown>;
+	response: Record<string, unknown> | null;
 	formDefinition: FormDefinition | null;
+	/** ISO 8601 UTC string when redaction fired, else null. */
+	responseRedactedAt: string | null;
 };
 
-export function SubmittedResponse({ response, formDefinition }: Props) {
+export function SubmittedResponse({
+	response,
+	formDefinition,
+	responseRedactedAt,
+}: Props) {
+	// Redacted path takes priority: when the customer's callback has
+	// ACKed and the response column has been cleared, there is no
+	// content to render — only a "delivered" placeholder with the
+	// timestamp.
+	if (responseRedactedAt) {
+		return <DeliveredPlaceholder timestamp={responseRedactedAt} />;
+	}
+	// Defensive: if the caller mounts us with no response and no
+	// redaction, render nothing rather than a confusing empty card.
+	// The page-level wrapper already gates on either of these being
+	// truthy, so this branch is only reachable via mis-use.
+	if (!response) return null;
+
 	if (formDefinition) {
 		// Disabled mode: FormRenderer threads the prop to every
 		// primitive's <input disabled />, producing a faithful
@@ -51,6 +71,42 @@ export function SubmittedResponse({ response, formDefinition }: Props) {
 		);
 	}
 	return <RecursiveValue value={response} />;
+}
+
+/**
+ * Placeholder shown in place of the structured read-back when the
+ * server has redacted ``response`` after a successful callback
+ * delivery. The timestamp is rendered in the reviewer's local
+ * timezone via ``Intl.DateTimeFormat`` so they can read "I see this
+ * was delivered at 3:47 PM" without doing UTC math.
+ */
+function DeliveredPlaceholder({ timestamp }: { timestamp: string }) {
+	const local = formatLocal(timestamp);
+	return (
+		<div className="space-y-2">
+			<div className="text-sm font-semibold text-white/80">
+				Response delivered
+			</div>
+			<p className="text-sm text-white/60 leading-relaxed">
+				The response was forwarded to the caller at{" "}
+				<span className="text-white/80">{local}</span> and its content
+				has been redacted for privacy. The audit log retains submission
+				metadata.
+			</p>
+		</div>
+	);
+}
+
+function formatLocal(iso: string): string {
+	// Server returns ISO 8601 strings; Date can parse them. Fall back
+	// to the raw string if the input is malformed — we'd rather show
+	// the timestamp as-is than crash the page.
+	const date = new Date(iso);
+	if (Number.isNaN(date.getTime())) return iso;
+	return new Intl.DateTimeFormat(undefined, {
+		dateStyle: "medium",
+		timeStyle: "short",
+	}).format(date);
 }
 
 function noop() {

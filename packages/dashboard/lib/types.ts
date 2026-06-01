@@ -31,6 +31,20 @@ export interface Task {
 	 * review or non-AwaitVerify await_human callers.
 	 */
 	initial_response: Record<string, unknown> | null;
+	/**
+	 * Whether the server should clear `response` after a successful
+	 * callback delivery (AwaitVerify pattern). The customer's process
+	 * is the canonical destination; the dashboard's read-back falls
+	 * back to a placeholder once redaction has happened.
+	 */
+	redact_response_after_submit: boolean;
+	/**
+	 * Stamped when redaction actually fires. Non-null means
+	 * `response` has been cleared and the dashboard should render
+	 * the "Response delivered" placeholder instead of the structured
+	 * read-back. ISO 8601 UTC string.
+	 */
+	response_redacted_at: string | null;
 	status: TaskStatus;
 	assign_to: Record<string, unknown> | null;
 	assigned_to_email: string | null;

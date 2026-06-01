@@ -91,6 +91,14 @@ class Task(SQLModel, table=True):
 
     # Response
     response: dict[str, Any] | None = Field(sa_column=Column(JSON), default=None)
+    # Response redaction (AwaitVerify: the customer's process is the
+    # canonical destination for the response, not the dashboard's
+    # audit trail). When set, the response column is cleared on
+    # successful callback delivery and ``response_redacted_at`` is
+    # stamped — the dashboard read-back then shows a placeholder
+    # instead of the structured fields. Symmetric to but independent
+    # of ``redact_payload`` (request-side).
+    redact_response_after_submit: bool = Field(default=False)
 
     # Verification
     verifier_config: dict[str, Any] | None = Field(sa_column=Column(JSON), default=None)
@@ -125,6 +133,16 @@ class Task(SQLModel, table=True):
         default=None,
         sa_column=tz_timestamp_column(nullable=True, index=True),
         description="Pre-computed: created_at + timeout_seconds. Used by timeout scheduler.",
+    )
+    # When ``redact_response_after_submit=True`` AND callback delivery
+    # has succeeded (a 2xx came back from ``callback_url``), the
+    # response column is cleared and this column is stamped. The
+    # dashboard's submitted-response renderer branches on null vs
+    # non-null here to choose the "Response delivered" placeholder
+    # vs the structured read-back.
+    response_redacted_at: datetime | None = Field(
+        default=None,
+        sa_column=tz_timestamp_column(nullable=True),
     )
 
     # Webhook callback

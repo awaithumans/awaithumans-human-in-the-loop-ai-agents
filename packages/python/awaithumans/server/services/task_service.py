@@ -54,6 +54,7 @@ async def create_task(
     callback_url: str | None = None,
     task_metadata: dict[str, str] | None = None,
     initial_response: dict | None = None,
+    redact_response_after_submit: bool = False,
 ) -> tuple[Task, bool]:
     """Create a new task, or return the existing one if idempotency key matches.
 
@@ -113,6 +114,7 @@ async def create_task(
         callback_url=callback_url,
         task_metadata=task_metadata,
         initial_response=initial_response,
+        redact_response_after_submit=redact_response_after_submit,
         status=TaskStatus.CREATED,
         created_at=now,
         updated_at=now,

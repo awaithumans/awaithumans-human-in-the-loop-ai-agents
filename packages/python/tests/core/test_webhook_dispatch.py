@@ -468,3 +468,172 @@ async def test_redeliver_returns_none_for_unknown_id(
     session: AsyncSession,
 ) -> None:
     assert await redeliver(session, "nope-not-real") is None
+
+
+# ─── Response redaction after successful callback (O8) ────────────────
+
+
+async def _enqueued_row_with_redaction(
+    session: AsyncSession,
+    *,
+    callback_url: str,
+    redact_after_submit: bool,
+) -> tuple[WebhookDelivery, Task]:
+    """Variant of ``_enqueued_row`` that exposes the redaction flag and
+    returns the underlying Task too so tests can read response state
+    after delivery."""
+    task, _ = await create_task(
+        session,
+        task="t",
+        payload={},
+        payload_schema={},
+        response_schema={},
+        timeout_seconds=900,
+        idempotency_key=f"k-{secrets.token_hex(4)}",
+        callback_url=callback_url,
+        redact_response_after_submit=redact_after_submit,
+    )
+    completed = await complete_task(
+        session, task_id=task.id, response={"vendor": "Acme", "amount": 100}
+    )
+    await enqueue_completion_webhook(session, completed)
+    row = (
+        await session.execute(
+            select(WebhookDelivery).where(WebhookDelivery.task_id == completed.id)
+        )
+    ).scalar_one()
+    return row, completed
+
+
+@pytest.mark.asyncio
+async def test_response_redacted_on_successful_callback_when_flag_set(
+    session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The AwaitVerify happy path: task created with
+    ``redact_response_after_submit=True``, callback URL returns 200,
+    the response column gets cleared and ``response_redacted_at`` is
+    stamped. The customer's process is the canonical destination for
+    the data; the dashboard's audit trail keeps metadata only.
+    """
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        # Customer's process receives the FULL response, then ACKs.
+        # The redaction happens AFTER the body has left this server.
+        payload = json.loads(request.content)
+        assert payload["response"] == {"vendor": "Acme", "amount": 100}, (
+            "redaction must NOT affect the callback body — the customer's "
+            "endpoint is the canonical destination"
+        )
+        return httpx.Response(200)
+
+    _patch_httpx(monkeypatch, httpx.MockTransport(handler))
+
+    _, task = await _enqueued_row_with_redaction(
+        session, callback_url="https://customer.test/cb", redact_after_submit=True
+    )
+    assert task.response == {"vendor": "Acme", "amount": 100}
+    assert task.response_redacted_at is None
+
+    await process_due_deliveries(session)
+
+    # Re-read the task from the DB — the redaction commit happens in
+    # _record_outcome's session and we want to confirm it landed.
+    refreshed = await session.get(Task, task.id)
+    assert refreshed is not None
+    assert refreshed.response is None, "response must be cleared after successful callback"
+    assert refreshed.response_redacted_at is not None, (
+        "response_redacted_at must be stamped after successful callback"
+    )
+
+
+@pytest.mark.asyncio
+async def test_response_preserved_on_successful_callback_when_flag_not_set(
+    session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Default behavior is unchanged: tasks created without the
+    redaction flag (the common case for non-AwaitVerify callers)
+    keep their response in the DB after callback delivery.
+    """
+
+    async def handler(_: httpx.Request) -> httpx.Response:
+        return httpx.Response(200)
+
+    _patch_httpx(monkeypatch, httpx.MockTransport(handler))
+
+    _, task = await _enqueued_row_with_redaction(
+        session, callback_url="https://other.test/cb", redact_after_submit=False
+    )
+    await process_due_deliveries(session)
+
+    refreshed = await session.get(Task, task.id)
+    assert refreshed is not None
+    assert refreshed.response == {"vendor": "Acme", "amount": 100}
+    assert refreshed.response_redacted_at is None
+
+
+@pytest.mark.asyncio
+async def test_response_preserved_on_failed_callback_even_with_flag(
+    session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Redaction is gated on the callback SUCCEEDING. A failed
+    delivery (5xx, network error, abandoned) must not erase the
+    response — otherwise a flaky receiver would silently destroy
+    the data the operator might need to debug.
+    """
+
+    async def boom(_: httpx.Request) -> httpx.Response:
+        return httpx.Response(500)
+
+    _patch_httpx(monkeypatch, httpx.MockTransport(boom))
+
+    _, task = await _enqueued_row_with_redaction(
+        session, callback_url="https://flaky.test/cb", redact_after_submit=True
+    )
+    await process_due_deliveries(session)
+
+    refreshed = await session.get(Task, task.id)
+    assert refreshed is not None
+    assert refreshed.response == {"vendor": "Acme", "amount": 100}, (
+        "response must NOT be cleared when the callback fails"
+    )
+    assert refreshed.response_redacted_at is None
+
+
+@pytest.mark.asyncio
+async def test_redaction_idempotent_across_re_runs(
+    session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Two successful deliveries for the same task (admin redrive,
+    or a quirk of the scheduler re-claiming a row) must not bump
+    ``response_redacted_at``. The timestamp pins the FIRST
+    successful delivery — that's what the dashboard surfaces to
+    the operator.
+    """
+
+    async def ok(_: httpx.Request) -> httpx.Response:
+        return httpx.Response(200)
+
+    _patch_httpx(monkeypatch, httpx.MockTransport(ok))
+
+    row, task = await _enqueued_row_with_redaction(
+        session,
+        callback_url="https://customer.test/cb",
+        redact_after_submit=True,
+    )
+    await process_due_deliveries(session)
+
+    refreshed = await session.get(Task, task.id)
+    assert refreshed is not None
+    first_stamp = refreshed.response_redacted_at
+    assert first_stamp is not None
+
+    # Force a second delivery via the admin redrive path.
+    await redeliver(session, row.id)
+    await process_due_deliveries(session)
+
+    re_refreshed = await session.get(Task, task.id)
+    assert re_refreshed is not None
+    assert re_refreshed.response_redacted_at == first_stamp, (
+        "second successful delivery must not bump the redaction timestamp"
+    )
+    assert re_refreshed.response is None

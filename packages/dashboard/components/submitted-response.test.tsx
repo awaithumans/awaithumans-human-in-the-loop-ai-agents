@@ -89,6 +89,7 @@ describe("SubmittedResponse — with form_definition (Option A path)", () => {
 						shortText("zip"),
 					]),
 				])}
+				responseRedactedAt={null}
 			/>,
 		);
 		expect(screen.queryByText("[object Object]")).toBeNull();
@@ -116,6 +117,7 @@ describe("SubmittedResponse — with form_definition (Option A path)", () => {
 						shortText("qty"),
 					]),
 				])}
+				responseRedactedAt={null}
 			/>,
 		);
 		expect(screen.queryByText("[object Object]")).toBeNull();
@@ -131,6 +133,7 @@ describe("SubmittedResponse — with form_definition (Option A path)", () => {
 			<SubmittedResponse
 				response={{ vendor: "Acme Corp" }}
 				formDefinition={form([shortText("vendor")])}
+				responseRedactedAt={null}
 			/>,
 		);
 		const inputs = container.querySelectorAll("input");
@@ -153,6 +156,7 @@ describe("SubmittedResponse — without form_definition (fallback path)", () => 
 					address: { city: "Brooklyn", zip: "11201" },
 				}}
 				formDefinition={null}
+				responseRedactedAt={null}
 			/>,
 		);
 		expect(screen.queryByText("[object Object]")).toBeNull();
@@ -171,6 +175,7 @@ describe("SubmittedResponse — without form_definition (fallback path)", () => 
 					],
 				}}
 				formDefinition={null}
+				responseRedactedAt={null}
 			/>,
 		);
 		expect(screen.queryByText("[object Object]")).toBeNull();
@@ -186,6 +191,7 @@ describe("SubmittedResponse — without form_definition (fallback path)", () => 
 			<SubmittedResponse
 				response={{ approved: true, rejected: false }}
 				formDefinition={null}
+				responseRedactedAt={null}
 			/>,
 		);
 		expect(screen.getByText("Yes")).toBeTruthy();
@@ -201,6 +207,7 @@ describe("SubmittedResponse — without form_definition (fallback path)", () => 
 			<SubmittedResponse
 				response={{ note: null, optional_text: "" }}
 				formDefinition={null}
+				responseRedactedAt={null}
 			/>,
 		);
 		expect(screen.getAllByText("empty").length).toBe(2);
@@ -223,11 +230,79 @@ describe("SubmittedResponse — without form_definition (fallback path)", () => 
 					},
 				}}
 				formDefinition={null}
+				responseRedactedAt={null}
 			/>,
 		);
 		expect(screen.queryByText("[object Object]")).toBeNull();
 		expect(screen.getByText("Acme")).toBeTruthy();
 		expect(screen.getByText("O-1")).toBeTruthy();
 		expect(screen.getByText("O-2")).toBeTruthy();
+	});
+});
+
+describe("SubmittedResponse — redacted (post-callback) path", () => {
+	it("renders the 'Response delivered' placeholder when responseRedactedAt is set", () => {
+		// The AwaitVerify post-callback case: the customer's process
+		// got the response, the server cleared it from the DB, the
+		// dashboard shows the user that delivery happened without
+		// surfacing the actual content.
+		render(
+			<SubmittedResponse
+				response={null}
+				formDefinition={null}
+				responseRedactedAt="2026-06-01T15:47:23Z"
+			/>,
+		);
+		expect(screen.getByText("Response delivered")).toBeTruthy();
+		expect(screen.getByText(/forwarded to the caller/i)).toBeTruthy();
+		expect(screen.getByText(/redacted for privacy/i)).toBeTruthy();
+	});
+
+	it("does NOT render the structured read-back when redacted", () => {
+		// Even if the response field is somehow still present in the
+		// payload (wire shape drift, partial migration, etc.), the
+		// redacted placeholder must take priority — otherwise the
+		// "redacted" label and the actual content would both render
+		// and the privacy guarantee is broken.
+		render(
+			<SubmittedResponse
+				response={{ vendor: "Acme Corp", amount: 100 }}
+				formDefinition={null}
+				responseRedactedAt="2026-06-01T15:47:23Z"
+			/>,
+		);
+		expect(screen.queryByText("Acme Corp")).toBeNull();
+		expect(screen.queryByText("100")).toBeNull();
+		expect(screen.getByText("Response delivered")).toBeTruthy();
+	});
+
+	it("falls back to the raw ISO string when the timestamp is malformed", () => {
+		// Defensive: a malformed timestamp from a future server version
+		// shouldn't crash the page. We render the raw string verbatim
+		// so an operator debugging it can still see the value.
+		render(
+			<SubmittedResponse
+				response={null}
+				formDefinition={null}
+				responseRedactedAt="not-an-iso-date"
+			/>,
+		);
+		expect(screen.getByText("Response delivered")).toBeTruthy();
+		expect(screen.getByText(/not-an-iso-date/)).toBeTruthy();
+	});
+
+	it("renders nothing when response is null and not redacted", () => {
+		// Defensive: the page-level wrapper guards on
+		// (response || response_redacted_at), so this branch is only
+		// reachable via mis-use. Don't render an empty card.
+		const { container } = render(
+			<SubmittedResponse
+				response={null}
+				formDefinition={null}
+				responseRedactedAt={null}
+			/>,
+		);
+		// The component returns null — container has zero children.
+		expect(container.firstChild).toBeNull();
 	});
 });
