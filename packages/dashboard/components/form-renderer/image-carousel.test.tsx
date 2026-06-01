@@ -193,3 +193,230 @@ describe("ImageCarousel — no lightbox button when only one image", () => {
 // CSS like `user-drag` while testing — they don't represent a
 // correctness issue, just happy-dom's strict-mode chatter.
 vi.spyOn(console, "warn").mockImplementation(() => {});
+
+// ── Multi-page (AwaitVerify M5) ────────────────────────────────────
+
+function pagedImage(
+	name: string,
+	url: string,
+	page: number,
+	frag: number,
+	pageCount: number,
+	fragmentsPerPage = 5,
+): ImageField {
+	return {
+		...imageField(name, url),
+		page_index: page,
+		fragment_in_page: frag,
+		page_count: pageCount,
+		fragments_per_page: fragmentsPerPage,
+	};
+}
+
+function threePagesByFive(): ImageField[] {
+	const out: ImageField[] = [];
+	for (let p = 0; p < 3; p++) {
+		for (let f = 0; f < 5; f++) {
+			out.push(pagedImage(`p${p}f${f}`, `http://x/${p}-${f}.png`, p, f, 3, 5));
+		}
+	}
+	return out;
+}
+
+describe("ImageCarousel — page selector (multi-page mode)", () => {
+	it("renders a tab strip when 2 ≤ pageCount ≤ 8", () => {
+		// The brief calls this the "compact tab strip" — preferred
+		// over a numeric input when the page count fits on one row.
+		render(<ImageCarousel images={threePagesByFive()} />);
+		const tabs = screen.getByTestId("page-selector-tabs");
+		expect(tabs).toBeTruthy();
+		// Three tabs labeled 1, 2, 3.
+		expect(tabs.textContent).toContain("1");
+		expect(tabs.textContent).toContain("2");
+		expect(tabs.textContent).toContain("3");
+	});
+
+	it("renders the numeric input variant when pageCount > 8", () => {
+		// Threshold is 8 — past that the tab strip would wrap or
+		// shrink uncomfortably on laptop widths.
+		const many: ImageField[] = [];
+		for (let p = 0; p < 12; p++) {
+			for (let f = 0; f < 5; f++) {
+				many.push(
+					pagedImage(`p${p}f${f}`, `http://x/${p}-${f}.png`, p, f, 12, 5),
+				);
+			}
+		}
+		render(<ImageCarousel images={many} />);
+		expect(screen.getByTestId("page-selector-input")).toBeTruthy();
+		expect(screen.queryByTestId("page-selector-tabs")).toBeNull();
+	});
+
+	it("does NOT render the page selector for single-page tasks", () => {
+		// Backward compat: a task with no page metadata renders
+		// today's flat carousel — no page chrome.
+		render(<ImageCarousel images={TWO_IMAGES} />);
+		expect(screen.queryByTestId("page-selector-tabs")).toBeNull();
+		expect(screen.queryByTestId("page-selector-input")).toBeNull();
+	});
+
+	it("clicking a page tab jumps to that page's first fragment", () => {
+		// Test from the brief: "Clicking tab [2] shows fragment with
+		// page_index === 1, fragment_in_page === 0 first."
+		const { container } = render(
+			<ImageCarousel images={threePagesByFive()} />,
+		);
+
+		// Tab 2 (1-indexed) maps to page_index 1 (0-indexed).
+		const tabs = screen.getByTestId("page-selector-tabs");
+		const tab2 = tabs.querySelector("button:nth-of-type(2)")!;
+		fireEvent.click(tab2);
+
+		const img = container.querySelector("img");
+		expect(img).not.toBeNull();
+		expect(img?.getAttribute("src")).toBe("http://x/1-0.png");
+	});
+});
+
+describe("ImageCarousel — keyboard nav across pages", () => {
+	it("→ on the last fragment of page 1 advances to page 2 fragment 1", () => {
+		// "→ on the last fragment of page N advances to fragment 1
+		// of the next page" — the cross-page flow that makes flat
+		// scrolling still possible.
+		const { container } = render(
+			<ImageCarousel images={threePagesByFive()} />,
+		);
+
+		// Navigate to the last fragment of page 1: tap → four times.
+		for (let i = 0; i < 4; i++) {
+			fireEvent.keyDown(window, { key: "ArrowRight" });
+		}
+		let img = container.querySelector("img");
+		expect(img?.getAttribute("src")).toBe("http://x/0-4.png");
+
+		// One more → must jump to page 2 fragment 1 (page_index=1, frag=0).
+		fireEvent.keyDown(window, { key: "ArrowRight" });
+		img = container.querySelector("img");
+		expect(img?.getAttribute("src")).toBe("http://x/1-0.png");
+	});
+
+	it("← on the first fragment of page 2 returns to last fragment of page 1", () => {
+		// Symmetric: backwards traversal also crosses boundaries.
+		const { container } = render(
+			<ImageCarousel images={threePagesByFive()} />,
+		);
+
+		// Jump to page 2 via tab.
+		const tabs = screen.getByTestId("page-selector-tabs");
+		fireEvent.click(tabs.querySelector("button:nth-of-type(2)")!);
+		let img = container.querySelector("img");
+		expect(img?.getAttribute("src")).toBe("http://x/1-0.png");
+
+		// ← must go back to page 1's last fragment.
+		fireEvent.keyDown(window, { key: "ArrowLeft" });
+		img = container.querySelector("img");
+		expect(img?.getAttribute("src")).toBe("http://x/0-4.png");
+	});
+
+	it("PageDown jumps to fragment 1 of the next page", () => {
+		// Faster than 5 × → for the reviewer who knows they want
+		// the next page, not the next fragment.
+		const { container } = render(
+			<ImageCarousel images={threePagesByFive()} />,
+		);
+
+		fireEvent.keyDown(window, { key: "PageDown" });
+		let img = container.querySelector("img");
+		expect(img?.getAttribute("src")).toBe("http://x/1-0.png");
+
+		fireEvent.keyDown(window, { key: "PageDown" });
+		img = container.querySelector("img");
+		expect(img?.getAttribute("src")).toBe("http://x/2-0.png");
+	});
+
+	it("PageUp jumps to fragment 1 of the previous page", () => {
+		const { container } = render(
+			<ImageCarousel images={threePagesByFive()} />,
+		);
+
+		// Start on page 3 via the tab.
+		const tabs = screen.getByTestId("page-selector-tabs");
+		fireEvent.click(tabs.querySelector("button:nth-of-type(3)")!);
+		let img = container.querySelector("img");
+		expect(img?.getAttribute("src")).toBe("http://x/2-0.png");
+
+		fireEvent.keyDown(window, { key: "PageUp" });
+		img = container.querySelector("img");
+		expect(img?.getAttribute("src")).toBe("http://x/1-0.png");
+	});
+
+	it("active page tab visually flips when navigation crosses pages", () => {
+		// The page selector's "active" highlight must follow the
+		// current fragment — without this the reviewer would see
+		// "I'm on tab [1]" while looking at page 2's content.
+		render(<ImageCarousel images={threePagesByFive()} />);
+
+		const tabs = screen.getByTestId("page-selector-tabs");
+		const tabButtons = tabs.querySelectorAll("button");
+		// Initial: tab 1 is selected.
+		expect(tabButtons[0].getAttribute("aria-selected")).toBe("true");
+		expect(tabButtons[1].getAttribute("aria-selected")).toBe("false");
+
+		// PageDown → page 2.
+		fireEvent.keyDown(window, { key: "PageDown" });
+
+		// Tab 2 should now be selected.
+		const updatedTabs = screen
+			.getByTestId("page-selector-tabs")
+			.querySelectorAll("button");
+		expect(updatedTabs[0].getAttribute("aria-selected")).toBe("false");
+		expect(updatedTabs[1].getAttribute("aria-selected")).toBe("true");
+	});
+
+	it("counter shows 'view K of 5' for multi-page tasks (not the flat K/N)", () => {
+		// Per the brief: the inner counter is per-page, not global.
+		// Reviewer expectation: "I'm on view 3 of 5 of this page"
+		// — far more useful than "I'm on 8 of 25" for grok.
+		render(<ImageCarousel images={threePagesByFive()} />);
+
+		expect(screen.getByText("view 1 of 5")).toBeTruthy();
+
+		// One → → "view 2 of 5".
+		fireEvent.keyDown(window, { key: "ArrowRight" });
+		expect(screen.getByText("view 2 of 5")).toBeTruthy();
+	});
+});
+
+describe("ImageLightbox — page header (multi-page mode)", () => {
+	it("shows 'Page N of M, view K of 5' when the current image carries metadata", () => {
+		// Brief: when active, the lightbox header should show
+		// "Page N of M, view K of 5". The lightbox is mounted on
+		// click via the Full screen button.
+		render(<ImageCarousel images={threePagesByFive()} />);
+
+		// Navigate to page 2 fragment 3 so the header isn't trivially
+		// "Page 1 of 3, view 1 of 5".
+		const tabs = screen.getByTestId("page-selector-tabs");
+		fireEvent.click(tabs.querySelector("button:nth-of-type(2)")!);
+		fireEvent.keyDown(window, { key: "ArrowRight" });
+		fireEvent.keyDown(window, { key: "ArrowRight" });
+
+		fireEvent.click(
+			screen.getByRole("button", { name: /full[- ]?screen/i }),
+		);
+
+		const header = screen.getByTestId("lightbox-page-header");
+		expect(header.textContent).toContain("Page 2 of 3");
+		expect(header.textContent).toContain("view 3 of 5");
+	});
+
+	it("does NOT show the lightbox page header for legacy single-page tasks", () => {
+		// Backward compat: image fields without page metadata don't
+		// produce a header — the bottom "K / N" counter is sufficient.
+		render(<ImageCarousel images={TWO_IMAGES} />);
+		fireEvent.click(
+			screen.getByRole("button", { name: /full[- ]?screen/i }),
+		);
+		expect(screen.queryByTestId("lightbox-page-header")).toBeNull();
+	});
+});

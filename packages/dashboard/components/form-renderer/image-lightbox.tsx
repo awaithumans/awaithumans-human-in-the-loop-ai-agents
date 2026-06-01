@@ -105,6 +105,23 @@ export function ImageLightbox({
 				className="max-w-[95vw] max-h-[95vh] object-contain"
 			/>
 
+			{/* Top header — shows "Page N of M, view K of 5" when the
+			    current image carries page metadata (AwaitVerify M5).
+			    Without metadata, no header is shown — the bottom
+			    "K / N" counter is sufficient for a flat document. */}
+			{current?.page_index !== undefined &&
+				current?.page_count !== undefined && (
+					<div
+						className="absolute top-4 left-1/2 -translate-x-1/2 bg-white/10 backdrop-blur-sm rounded-full px-4 py-2 text-sm text-white/90 tabular-nums"
+						data-testid="lightbox-page-header"
+					>
+						Page {current.page_index + 1} of {current.page_count}
+						{current.fragment_in_page !== undefined &&
+							current.fragments_per_page !== undefined &&
+							`, view ${current.fragment_in_page + 1} of ${current.fragments_per_page}`}
+					</div>
+				)}
+
 			<button
 				type="button"
 				onClick={(e) => {
