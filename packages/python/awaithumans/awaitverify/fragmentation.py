@@ -137,12 +137,13 @@ def fragment_document(source: bytes | str | Path) -> list[list[bytes]]:
     Returns a list-of-lists: outer index is page (0..N-1), inner list
     holds AWAITVERIFY_FRAGMENT_COUNT (5) PNG-encoded fragments.
 
-    Fragmentation regions per page:
-        fragment 0: right half hidden
-        fragment 1: left + center hidden (only right quarter visible)
-        fragment 2: center 50% hidden
-        fragment 3: top half hidden
-        fragment 4: bottom half hidden
+    Fragmentation regions per page (each fragment leaks ~50% of the
+    page, never more — see ``_mask_regions`` for the geometry):
+        fragment 0: right half hidden  (LEFT half visible)
+        fragment 1: left half hidden   (RIGHT half visible)
+        fragment 2: center 50% hidden  (LEFT + RIGHT edges visible)
+        fragment 3: bottom half hidden (TOP half visible)
+        fragment 4: top half hidden    (BOTTOM half visible)
     """
     pages = load_pages(source)
     return [_fragment_page(page) for page in pages]
@@ -169,18 +170,28 @@ def _fragment_page(page: Any) -> list[bytes]:
 
 
 def _mask_regions(width: int, height: int) -> list[tuple[int, int, int, int]]:
-    """Return the five mask rectangles in (left, top, right, bottom) form."""
+    """Return the five mask rectangles in (left, top, right, bottom) form.
+
+    Symmetry invariant: every mask blacks out approximately 50% of the
+    page — no more. A reviewer mentally re-assembles the document by
+    scanning across fragments, so each fragment must leak about the
+    same amount. Pre-fix, mask 1 blacked out 75% (only the right
+    quarter visible) which made the carousel visually lopsided.
+
+    ``quarter_w`` and ``three_quarter_w`` are still used by mask 2
+    (center-strip hidden, both edge quarters visible). Keep them.
+    """
     half_w = width // 2
     quarter_w = width // 4
     three_quarter_w = (3 * width) // 4
     half_h = height // 2
 
     return [
-        (half_w, 0, width, height),
-        (0, 0, three_quarter_w, height),
-        (quarter_w, 0, three_quarter_w, height),
-        (0, 0, width, half_h),
-        (0, half_h, width, height),
+        (half_w, 0, width, height),  # 0: hide right half
+        (0, 0, half_w, height),  # 1: hide left half  (was: three_quarter_w → asymmetric)
+        (quarter_w, 0, three_quarter_w, height),  # 2: hide center 50%
+        (0, 0, width, half_h),  # 3: hide top half
+        (0, half_h, width, height),  # 4: hide bottom half
     ]
 
 
