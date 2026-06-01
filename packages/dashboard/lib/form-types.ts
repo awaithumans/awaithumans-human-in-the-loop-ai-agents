@@ -192,6 +192,14 @@ export type ImageField = BaseField & {
 	alt: string | null;
 	width: number | null;
 	height: number | null;
+	// Per-page metadata (AwaitVerify M5, optional). When present the
+	// carousel renders a two-level page selector + per-page nav. When
+	// absent (legacy tasks created before M5) the field renders in
+	// today's flat carousel — DO NOT crash on missing keys.
+	page_index?: number; // 0-indexed
+	fragment_in_page?: number; // 0-indexed within page
+	page_count?: number; // total pages
+	fragments_per_page?: number; // always 5 at v1
 };
 
 export type VideoField = BaseField & {
