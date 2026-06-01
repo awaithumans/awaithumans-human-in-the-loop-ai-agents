@@ -306,3 +306,65 @@ describe("SubmittedResponse — redacted (post-callback) path", () => {
 		expect(container.firstChild).toBeNull();
 	});
 });
+
+describe("SubmittedResponse — optimistic-redaction chain (PR H, O9)", () => {
+	// These tests pin the submit-time behavior of the task page in a
+	// focused way: take a task with a populated response, run the
+	// applyOptimisticRedaction overlay (the same helper handleSubmit
+	// uses), and mount SubmittedResponse with the result. The
+	// reviewer's typed values must NOT survive into the rendered
+	// DOM. This is what closes the shoulder-surf / screenshot
+	// window between Submit and the server-side callback dispatch.
+
+	it("typed values disappear from the DOM immediately after the overlay applies", async () => {
+		const { applyOptimisticRedaction } = await import(
+			"@/app/(dashboard)/task/optimistic-redact"
+		);
+
+		// Simulate "reviewer just typed a sensitive value and clicked Submit"
+		// — a unique string we can grep for to prove it leaks nowhere.
+		const SENSITIVE = "very-sensitive-value-PR-H-pin";
+		const taskAfterSubmit = applyOptimisticRedaction({
+			// Minimal Task shape — only the fields the renderer reads.
+			// Cast through unknown to skip the full Task interface;
+			// the helper's shape contract is exercised in
+			// optimistic-redact.test.ts.
+			id: "t-1",
+			response: { secret: SENSITIVE },
+		} as unknown as Parameters<typeof applyOptimisticRedaction>[0]);
+
+		render(
+			<SubmittedResponse
+				response={taskAfterSubmit.response}
+				formDefinition={null}
+				responseRedactedAt={taskAfterSubmit.response_redacted_at}
+			/>,
+		);
+
+		// Paranoid pin — walk the entire DOM and assert the
+		// sensitive string isn't anywhere. Catches the case where
+		// a sibling component still has a copy in state.
+		expect(document.body.textContent).not.toContain(SENSITIVE);
+		// And the placeholder is up.
+		expect(screen.getByText("Response delivered")).toBeTruthy();
+		expect(screen.getByText(/redacted for privacy/i)).toBeTruthy();
+	});
+
+	it("non-redact submit path still renders the typed values", async () => {
+		// Counter-test: when the task does NOT carry the redaction
+		// flag, the existing in-house team behavior is preserved.
+		// SubmittedResponse without responseRedactedAt renders the
+		// structured read-back as PR F (#171) shipped it.
+		render(
+			<SubmittedResponse
+				response={{ secret: "in-house-team-keeps-seeing-this" }}
+				formDefinition={null}
+				responseRedactedAt={null}
+			/>,
+		);
+		expect(
+			screen.getByText("in-house-team-keeps-seeing-this"),
+		).toBeTruthy();
+		expect(screen.queryByText("Response delivered")).toBeNull();
+	});
+});
