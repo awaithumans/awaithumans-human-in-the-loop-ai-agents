@@ -33,6 +33,7 @@ import {
 	initialValueFor,
 	type FormValue,
 } from "@/components/form-renderer";
+import { SubmittedResponse } from "@/components/submitted-response";
 
 /**
  * Route is query-param (`/task?id=...`) rather than dynamic segment
@@ -427,28 +428,18 @@ function TaskDetailPageInner() {
 							<Eyebrow as="h2" size="md" tone="bright" weight="semibold" className="block mb-4">
 								Response
 							</Eyebrow>
-							<div className="space-y-3">
-								{Object.entries(task.response).map(([key, value]) => (
-									<div key={key} className="flex items-start gap-3">
-										<span className="text-white/40 text-sm min-w-[120px] font-mono">
-											{key}
-										</span>
-										<span className="text-sm">
-											{typeof value === "boolean" ? (
-												<span
-													className={
-														value ? "text-brand" : "text-red-400"
-													}
-												>
-													{value ? "Yes" : "No"}
-												</span>
-											) : (
-												String(value)
-											)}
-										</span>
-									</div>
-								))}
-							</div>
+							{/* Read-back uses the same FormRenderer the
+							    reviewer filled in, in disabled mode, so
+							    nested fields (object_group,
+							    repeatable_group) render with the right
+							    shape instead of the previous
+							    `String(value)` coercion that produced
+							    "[object Object]" for any nested value.
+							    See components/submitted-response.tsx. */}
+							<SubmittedResponse
+								response={task.response}
+								formDefinition={task.form_definition}
+							/>
 							{completedByLabel(task) && (
 								<div className="mt-4 text-white/30 text-xs">
 									Completed by {completedByLabel(task)} via{" "}

@@ -1,0 +1,137 @@
+"use client";
+
+/**
+ * Read-only view of a task's submitted response.
+ *
+ * Pre-PR, the task page rendered the response as `Object.entries`
+ * with `String(value)` per value, which JavaScript happily coerces
+ * to "[object Object]" for any nested object or array. Reviewers
+ * submitting a nested response (a list[BaseModel], an object_group)
+ * saw broken text immediately after clicking Submit.
+ *
+ * Two render paths:
+ *
+ *   1. **With form_definition (primary).** Mount the same
+ *      ``FormRenderer`` the reviewer used to fill the form, with
+ *      ``disabled={true}`` so every input is read-only. This stays
+ *      in sync with the write side automatically — new field kinds
+ *      land in one place and the read-back gets them for free.
+ *
+ *   2. **Without form_definition (fallback).** Some tasks predate
+ *      form_definition (programmatic tasks created via raw
+ *      ``await_human`` without a Pydantic response_schema) so a
+ *      ``FormDefinition`` may be null on the wire. In that case we
+ *      walk the response JSON recursively and render primitives
+ *      inline, arrays as numbered groups, and objects as nested
+ *      key/value pairs. The fallback path never emits
+ *      "[object Object]" — that string should not appear anywhere
+ *      a reviewer can see.
+ */
+
+import { FormRenderer } from "@/components/form-renderer";
+import type { FormDefinition } from "@/lib/form-types";
+
+type Props = {
+	response: Record<string, unknown>;
+	formDefinition: FormDefinition | null;
+};
+
+export function SubmittedResponse({ response, formDefinition }: Props) {
+	if (formDefinition) {
+		// Disabled mode: FormRenderer threads the prop to every
+		// primitive's <input disabled />, producing a faithful
+		// read-back of exactly what the reviewer saw + filled in.
+		return (
+			<FormRenderer
+				form={formDefinition}
+				value={response}
+				onChange={noop}
+				disabled
+			/>
+		);
+	}
+	return <RecursiveValue value={response} />;
+}
+
+function noop() {
+	// FormRenderer requires an onChange but in disabled mode every
+	// primitive renderer suppresses user interaction, so this is a
+	// pure type-shim. Inlined rather than imported so a future move
+	// of this component doesn't drag a "utils" file.
+}
+
+// ── Fallback: recursive primitive renderer ─────────────────────────
+
+/**
+ * Walks a JSON value and renders it inline. Three real cases plus
+ * a defensive last branch:
+ *   - primitive (string / number / boolean / null) → readable text
+ *   - array → indexed entries with the same recursive renderer
+ *   - object → key/value pairs, recursing into the values
+ *   - anything else (defensive: BigInt, etc., never present in
+ *     server-parsed JSON) → JSON.stringify in a <pre> so the
+ *     reviewer at least sees the raw shape rather than
+ *     "[object Object]"
+ */
+function RecursiveValue({ value }: { value: unknown }) {
+	if (value === null || value === undefined) {
+		return <span className="text-white/30 italic">empty</span>;
+	}
+	if (typeof value === "boolean") {
+		return (
+			<span className={value ? "text-brand" : "text-red-400"}>
+				{value ? "Yes" : "No"}
+			</span>
+		);
+	}
+	if (typeof value === "number" || typeof value === "string") {
+		// Empty string is a meaningful value (reviewer explicitly
+		// cleared the field); rendering it as a thin placeholder
+		// makes it visible.
+		if (value === "") return <span className="text-white/30 italic">empty</span>;
+		return <span className="text-sm">{value}</span>;
+	}
+	if (Array.isArray(value)) {
+		if (value.length === 0) {
+			return <span className="text-white/30 italic">no items</span>;
+		}
+		return (
+			<ol className="list-decimal list-inside space-y-1 pl-3 border-l-2 border-white/10">
+				{value.map((item, i) => (
+					<li key={i} className="text-sm">
+						<RecursiveValue value={item} />
+					</li>
+				))}
+			</ol>
+		);
+	}
+	if (typeof value === "object") {
+		const entries = Object.entries(value as Record<string, unknown>);
+		if (entries.length === 0) {
+			return <span className="text-white/30 italic">empty</span>;
+		}
+		return (
+			<div className="space-y-2 pl-3 border-l-2 border-white/10">
+				{entries.map(([key, v]) => (
+					<div key={key} className="flex items-start gap-3">
+						<span className="text-white/40 text-sm min-w-[120px] font-mono">
+							{key}
+						</span>
+						<div className="text-sm flex-1">
+							<RecursiveValue value={v} />
+						</div>
+					</div>
+				))}
+			</div>
+		);
+	}
+	// Defensive: shapes that don't come from JSON (BigInt, Date,
+	// Symbol). Real JSON-loaded payloads can't reach this branch,
+	// but we'd rather show JSON-ish text than the literal
+	// "[object Object]".
+	return (
+		<pre className="text-xs text-white/50 bg-white/5 p-2 rounded overflow-x-auto">
+			{JSON.stringify(value, null, 2)}
+		</pre>
+	);
+}
