@@ -48,12 +48,18 @@ import {
 	SectionCollapseRenderer,
 	SectionRenderer,
 } from "./layout";
-import { SubformRenderer, TableRenderer } from "./complex";
+import {
+	ObjectGroupRenderer,
+	RepeatableGroupRenderer,
+	SubformRenderer,
+	TableRenderer,
+} from "./complex";
 import { ImageCarousel } from "./image-carousel";
 import { groupImageFields } from "./image-grouping";
 import type { FormValue } from "./types";
 
 export { buildResponseValue } from "./build-response-value";
+export { initialValueFor } from "./initial-value";
 export type { FormValue } from "./types";
 
 type Props = {
@@ -337,85 +343,81 @@ function FieldDispatch({
 					)}
 				/>
 			);
-	}
-}
 
-// ─── Initial value helper ────────────────────────────────────────────
+		// ── Nested Pydantic groups ──────────────────────────
+		// object_group: read the nested sub-FormValue at value[field.name]
+		// and dispatch children with that as their scope. Children's
+		// `setField` wraps back to set value[field.name][child.name],
+		// preserving the rest of the sub-scope.
+		case "object_group": {
+			const groupValue = isPlainObject(value[field.name])
+				? (value[field.name] as FormValue)
+				: {};
+			const setGroup = (next: FormValue) =>
+				onChange({ ...value, [field.name]: next });
+			return (
+				<ObjectGroupRenderer field={field}>
+					{field.fields.map((child, j) => (
+						<FieldDispatch
+							key={`${child.name || child.kind}-${j}`}
+							field={child}
+							value={groupValue}
+							onChange={setGroup}
+							disabled={disabled}
+						/>
+					))}
+				</ObjectGroupRenderer>
+			);
+		}
 
-/**
- * Build an initial form value (empty dict) from a FormDefinition. Picks up
- * per-field defaults where the primitive declares one.
- */
-export function initialValueFor(form: FormDefinition): FormValue {
-	const out: FormValue = {};
-	walk(form.fields, out);
-	return out;
-}
-
-// Kinds that render UI but don't contribute a value to the response.
-// Skipping them here keeps display-only primitives (text blocks, media,
-// layout) out of the submitted response payload even when they have a
-// `name`. Without this, e.g. a display_text named "intro" shows up as
-// `{"intro": null}` in the human's response — misleading and pollutes
-// the audit trail.
-const NON_INPUT_KINDS = new Set([
-	"display_text",
-	"image",
-	"video",
-	"pdf_viewer",
-	"html",
-	"section",
-	"divider",
-]);
-
-function walk(fields: FormField[], out: FormValue): void {
-	for (const f of fields) {
-		if (!f.name) continue;
-		if (NON_INPUT_KINDS.has(f.kind)) continue;
-		switch (f.kind) {
-			case "switch":
-				out[f.name] = f.default ?? null;
-				break;
-			case "single_select":
-				out[f.name] = f.default ?? null;
-				break;
-			case "multi_select":
-				out[f.name] = f.default ?? [];
-				break;
-			case "picture_choice":
-				out[f.name] = f.default ?? [];
-				break;
-			case "slider":
-				out[f.name] = f.default ?? (f.min + f.max) / 2;
-				break;
-			case "star_rating":
-				out[f.name] = f.default ?? 0;
-				break;
-			case "opinion_scale":
-				out[f.name] = f.default ?? null;
-				break;
-			case "date":
-			case "datetime":
-			case "time":
-				out[f.name] = f.default ?? null;
-				break;
-			case "ranking":
-				out[f.name] = f.options.map((o) => o.value);
-				break;
-			case "table":
-				out[f.name] = [];
-				break;
-			case "subform":
-				out[f.name] = [];
-				break;
-			case "section_collapse":
-				walk(f.fields, out);
-				break;
-			default:
-				// Plain-value input kinds (short_text, long_text, rich_text,
-				// file_upload, signature, date_range) start blank.
-				out[f.name] = null;
+		// repeatable_group: read the array at value[field.name]. Each
+		// row is itself a FormValue (dict). Cells dispatch the actual
+		// item_field renderer with the row as the value scope.
+		case "repeatable_group": {
+			const rows: FormValue[] = Array.isArray(value[field.name])
+				? (value[field.name] as FormValue[])
+				: [];
+			return (
+				<RepeatableGroupRenderer
+					field={field}
+					rows={rows}
+					onRowsChange={(next) =>
+						onChange({ ...value, [field.name]: next })
+					}
+					disabled={disabled}
+					renderCell={(row, setRow, itemField) => (
+						<FieldDispatch
+							field={itemField}
+							value={row}
+							onChange={setRow}
+							disabled={disabled}
+						/>
+					)}
+				/>
+			);
 		}
 	}
+	// Unknown field kind — version skew between this dashboard and a
+	// newer managed-side schema walker, or a malformed form_definition
+	// payload. Show a friendly message instead of dumping JSON the
+	// reviewer can't action. Never reached in normal operation.
+	return (
+		<div className="border border-yellow-500/30 bg-yellow-500/5 rounded-md px-3 py-2 text-sm text-yellow-200/80">
+			This field isn&apos;t supported by the review form yet — please
+			contact support.
+		</div>
+	);
 }
+
+function isPlainObject(v: unknown): v is FormValue {
+	// "Plain" enough for our needs: non-null object that isn't an array.
+	// Doesn't try to defend against exotic prototypes — the form value
+	// is always either a literal {} from us or whatever JSON the server
+	// round-tripped, both of which qualify.
+	return typeof v === "object" && v !== null && !Array.isArray(v);
+}
+
+// initialValueFor / walk live in ./initial-value.ts so the test file
+// can import them without going through this .tsx (which the vitest
+// JSX-preserve loader can't parse). Re-exported above for callers.
 

@@ -23,6 +23,14 @@ export interface Task {
 	 * structures are rejected at the server schema layer.
 	 */
 	task_metadata: Record<string, string> | null;
+	/**
+	 * Pre-computed extraction snapshot (AwaitVerify Flow A / Flow B).
+	 * Matches the shape of `response_schema`. The form renderer mounts
+	 * the form with these values pre-populated so the reviewer
+	 * verifies/corrects rather than re-types. Null for pure-human
+	 * review or non-AwaitVerify await_human callers.
+	 */
+	initial_response: Record<string, unknown> | null;
 	status: TaskStatus;
 	assign_to: Record<string, unknown> | null;
 	assigned_to_email: string | null;
