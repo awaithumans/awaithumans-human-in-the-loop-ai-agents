@@ -52,6 +52,20 @@ class CreateTaskRequest(BaseModel):
             "re-types. Null for pure-human review."
         ),
     )
+    # AwaitVerify: clear the response from the server DB on successful
+    # callback delivery. The customer's callback URL is the canonical
+    # destination; the dashboard then shows a "delivered" placeholder
+    # instead of the response content. Symmetric to (but independent
+    # of) the request-side ``redact_payload`` flag.
+    redact_response_after_submit: bool = Field(
+        default=False,
+        description=(
+            "When true, the server clears ``response`` after the "
+            "callback URL returns 2xx and stamps "
+            "``response_redacted_at``. The dashboard read-back shows a "
+            "placeholder; the audit log retains submission metadata."
+        ),
+    )
 
 
 class CompleteTaskRequest(BaseModel):
@@ -82,6 +96,11 @@ class TaskResponse(BaseModel):
     assigned_to_slack_user_id: str | None = None
     initial_response: dict[str, Any] | None = None
     response: dict[str, Any] | None = None
+    # When non-null, ``response`` will be None (cleared on successful
+    # callback delivery). The dashboard reads this field to choose the
+    # "Response delivered" placeholder vs the structured read-back.
+    response_redacted_at: datetime | None = None
+    redact_response_after_submit: bool = False
     verifier_result: dict[str, Any] | None = None
     verification_attempt: int = 0
     timeout_seconds: int
@@ -101,7 +120,13 @@ class TaskResponse(BaseModel):
 
     model_config = {"from_attributes": True}
 
-    @field_serializer("created_at", "updated_at", "completed_at", "timed_out_at")
+    @field_serializer(
+        "created_at",
+        "updated_at",
+        "completed_at",
+        "timed_out_at",
+        "response_redacted_at",
+    )
     def _ser_dt(self, dt: datetime | None) -> str | None:
         return utc_iso(dt)
 

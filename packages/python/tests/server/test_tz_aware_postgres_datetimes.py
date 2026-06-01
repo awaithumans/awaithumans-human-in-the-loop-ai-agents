@@ -46,14 +46,19 @@ from awaithumans.server.db.models.base import tz_timestamp_column
 
 # Columns already declared tz-aware in their *original* alembic migration —
 # i.e., they never landed as naive on Postgres, so the runtime patch
-# doesn't need to repair them. Today this is service_api_keys (created
-# in 20260508_0510 with explicit `sa.DateTime(timezone=True)`). Update
-# this set if a future migration adds another such column.
+# doesn't need to repair them. Update this set if a future migration
+# adds another such column.
+#
+# service_api_keys.*       — 20260508_0510, original sa.DateTime(timezone=True)
+# tasks.response_redacted_at — 20260601_0900, declared with timezone=True at
+#                              creation (post-PR-6, so the runtime patch
+#                              would no-op against it anyway)
 _ALREADY_TZ_AWARE_IN_MIGRATION: frozenset[tuple[str, str]] = frozenset(
     {
         ("service_api_keys", "created_at"),
         ("service_api_keys", "last_used_at"),
         ("service_api_keys", "revoked_at"),
+        ("tasks", "response_redacted_at"),
     }
 )
 

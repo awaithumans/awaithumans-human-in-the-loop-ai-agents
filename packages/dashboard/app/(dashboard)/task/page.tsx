@@ -422,23 +422,26 @@ function TaskDetailPageInner() {
 						</div>
 					)}
 
-					{/* Completed Response */}
-					{task.response && (
+					{/* Completed Response. Panel mounts when there's a
+					    response OR a redaction stamp — the redacted
+					    case has no `task.response` but still has a
+					    "delivered" placeholder to render. */}
+					{(task.response || task.response_redacted_at) && (
 						<div className="border border-white/10 rounded-lg p-5">
 							<Eyebrow as="h2" size="md" tone="bright" weight="semibold" className="block mb-4">
-								Response
+								{task.response_redacted_at ? "Response delivered" : "Response"}
 							</Eyebrow>
-							{/* Read-back uses the same FormRenderer the
-							    reviewer filled in, in disabled mode, so
-							    nested fields (object_group,
-							    repeatable_group) render with the right
-							    shape instead of the previous
-							    `String(value)` coercion that produced
-							    "[object Object]" for any nested value.
-							    See components/submitted-response.tsx. */}
+							{/* SubmittedResponse owns the body branching:
+							    redacted → placeholder card with the
+							    local-time delivery stamp (no response
+							    content); has form_definition →
+							    FormRenderer disabled so nested fields
+							    (object_group, repeatable_group) render
+							    correctly; else → recursive fallback. */}
 							<SubmittedResponse
 								response={task.response}
 								formDefinition={task.form_definition}
+								responseRedactedAt={task.response_redacted_at}
 							/>
 							{completedByLabel(task) && (
 								<div className="mt-4 text-white/30 text-xs">
