@@ -1,0 +1,238 @@
+---
+title: "Errors"
+description: "Every exception verify_document() can raise, what triggers it, and the right fix."
+---
+
+`verify_document()` raises typed exceptions for every failure mode. Each one carries an `error_code` and a `docs_path` so you can pattern-match in code and route users to the right help page from your own UI.
+
+```python
+from awaithumans.awaitverify import (
+    VerifyDocumentArgError,
+    VerifyDocumentLoadError,
+    VerifyDocumentTooLargeError,
+    InsufficientBalanceError,
+    ExtractionFailedError,
+    ManagedBackendError,
+    OSSServerError,
+    OSSServerUnreachableError,
+    VerifyTimeoutError,
+    VerifyDepsMissingError,
+)
+```
+
+## At a glance
+
+| Exception | When it raises | Recoverable by code? |
+|---|---|---|
+| `VerifyDocumentArgError` | You passed conflicting arguments (e.g. both `prior_extraction` and `extraction`). | No: fix the call |
+| `VerifyDocumentLoadError` | The document can't be opened (corrupt PDF, unsupported format, LibreOffice missing). | Sometimes (retry with a different file) |
+| `VerifyDocumentTooLargeError` | Document exceeds 100 pages. | No: split the document |
+| `InsufficientBalanceError` | Account balance can't cover the page-count cost. | Yes (top up + retry) |
+| `ExtractionFailedError` | Flow B provider returned malformed output. | Sometimes (try a different prompt / model) |
+| `VerifyDepsMissingError` | A required package isn't installed (Pillow, pdf2image, provider SDK). | Yes: install the extra |
+| `ManagedBackendError` | Managed API rejected the request (auth, validation, schema mismatch). | Depends on error_code |
+| `OSSServerError` | OSS reviewer service returned a 4xx (auth or payload issue). | No: managed-side config bug, contact support |
+| `OSSServerUnreachableError` | OSS reviewer service unreachable (network blip, downtime). | Yes: retry |
+| `VerifyTimeoutError` | No reviewer submitted before `timeout_seconds`. | Yes: retry or extend timeout |
+
+## Detail per exception
+
+### `VerifyDocumentArgError`
+
+Conflicting or missing arguments to `verify_document()`. The most common triggers:
+
+- Passing both `prior_extraction=` and `extraction=` (pick one: Flow A or Flow B).
+- Passing neither `document_path=` nor `document_bytes=`.
+- Passing both `document_path=` and `document_bytes=`.
+- `response_schema` isn't a Pydantic `BaseModel` subclass.
+
+**Fix**: read the message; it tells you exactly which argument combination it rejected.
+
+### `VerifyDocumentLoadError`
+
+The SDK couldn't decode the document.
+
+```python
+try:
+    result = await verify_document(document_path="page.tiff", ...)
+except VerifyDocumentLoadError as exc:
+    print(f"Could not load: {exc}")
+    # Common causes:
+    # - The file isn't actually a supported format
+    # - PDF is encrypted or password-protected
+    # - Office document and LibreOffice isn't installed (install per the message)
+```
+
+For Office documents (DOCX, XLSX, PPTX), this often means LibreOffice isn't on PATH. Install it:
+
+```bash
+# macOS
+brew install --cask libreoffice
+
+# Debian / Ubuntu
+sudo apt-get install libreoffice
+```
+
+Override the binary location with `AWAITHUMANS_LIBREOFFICE_BIN`.
+
+### `VerifyDocumentTooLargeError`
+
+You hit the 100-page cap.
+
+```python
+try:
+    result = await verify_document(document_path="500-pages.pdf", ...)
+except VerifyDocumentTooLargeError as exc:
+    print(f"{exc.page_count} pages: limit is 100. Split the document.")
+```
+
+Workflow: extract pages 1-100, call verify_document, then 101-200, etc. The page split is on the customer side; we don't auto-split.
+
+### `InsufficientBalanceError`
+
+Pre-flight balance check failed.
+
+```python
+try:
+    result = await verify_document(...)
+except InsufficientBalanceError as exc:
+    print(f"Need ${exc.required_cents / 100:.2f}, have ${exc.balance_cents / 100:.2f}")
+    print("Top up at app.awaithumans.dev/billing")
+```
+
+Fields:
+
+- `balance_cents: int`: current balance
+- `required_cents: int`: what the call needed (`page_count × rate`)
+- `error_code: str`: `"INSUFFICIENT_BALANCE"` (stable for pattern-matching)
+- `docs_path: str`: `"insufficient-balance"` (deep-link helper)
+
+### `ExtractionFailedError`
+
+Flow B: the provider returned output that doesn't validate against your `response_schema`, or the provider call itself failed (timeout, rate limit, etc.).
+
+```python
+try:
+    result = await verify_document(
+        ...,
+        extraction=OpenAIExtraction(model="gpt-4o", prompt="..."),
+    )
+except ExtractionFailedError as exc:
+    print(f"Extraction failed: {exc}")
+    print("Available providers:")
+    print("  - OpenAIExtraction")
+    print("  - AnthropicExtraction")
+    print("  - ReductoExtraction")
+    print("  - ...")
+```
+
+You're not billed when this fires. The failure happens before the managed task is created.
+
+Common causes:
+- Prompt is too vague; the model didn't return all required fields. Tighten the prompt or simplify the schema.
+- Provider rate limit or transient outage. Retry with backoff.
+- Vision model picked a model name without vision support (e.g. `gpt-3.5-turbo`). Use a vision-capable model.
+
+### `VerifyDepsMissingError`
+
+A required package isn't installed.
+
+```python
+# Likely fix is one of:
+pip install "awaithumans[awaitverify]"               # base (Pillow, pdf2image, cryptography)
+pip install "awaithumans[awaitverify-openai]"        # Flow B with OpenAI
+pip install "awaithumans[awaitverify-anthropic]"     # Flow B with Anthropic
+# ...
+```
+
+The exception message names exactly which package is missing.
+
+### `ManagedBackendError`
+
+The managed API returned a 4xx or 5xx response. The exception carries:
+
+- `status_code: int`: HTTP status
+- `body: str`: raw response body (truncated to 500 chars)
+- `endpoint: str`: which managed endpoint was called
+- `error_code: str | None`: managed's `error_code` if it was a structured error
+- `docs_path: str | None`: managed's `docs_path` if provided
+
+Common status codes:
+
+- `401`: `AWAITHUMANS_API_KEY` is missing or invalid. Check the env var.
+- `402`: `InsufficientBalanceError` is the typed subclass; you shouldn't see plain `ManagedBackendError` here.
+- `422`: request body failed validation. The error message will name the field.
+- `5xx`: managed-side issue. Retry; if persistent, check status.awaithumans.dev.
+
+### `OSSServerError` / `OSSServerUnreachableError`
+
+The managed service couldn't reach or got a 4xx from the reviewer dashboard backend.
+
+- `OSSServerUnreachableError`: transient network issue between managed and OSS. Safe to retry; the original task is rolled back, so retry creates a fresh one.
+- `OSSServerError`: non-transient (auth misconfiguration, schema mismatch). Indicates a managed-side bug. Contact support. Your retry won't help.
+
+### `VerifyTimeoutError`
+
+No reviewer submitted before `timeout_seconds` elapsed.
+
+```python
+try:
+    result = await verify_document(
+        ...,
+        timeout_seconds=4 * 3600,  # 4 hours
+    )
+except VerifyTimeoutError as exc:
+    print(f"No reviewer in {exc.timeout_seconds}s. Retry with priority='high'?")
+```
+
+You're not billed for timed-out tasks. You can call `verify_document()` again with the same arguments to re-submit; the new task is independent.
+
+The default `timeout_seconds` is 48 hours, with a maximum of 30 days. Configure shorter timeouts for tasks that have business deadlines.
+
+## Pattern-matching by error_code
+
+For UI that surfaces our errors to your users, use the stable `error_code` strings rather than parsing exception messages:
+
+```python
+from awaithumans.awaitverify import ManagedBackendError, InsufficientBalanceError
+
+try:
+    result = await verify_document(...)
+except InsufficientBalanceError as exc:
+    show_top_up_prompt(exc.required_cents - exc.balance_cents)
+except ManagedBackendError as exc:
+    if exc.error_code == "RATE_LIMIT_EXCEEDED":
+        retry_with_backoff()
+    elif exc.error_code == "INVALID_SCHEMA":
+        log_schema_mismatch(exc.body)
+    else:
+        raise
+```
+
+## Debugging without leaking content
+
+When you log a `verify_document()` failure, log:
+
+- `error_code`
+- `task_id` (if the exception carries one)
+- `status_code` (for `ManagedBackendError`)
+- The exception class name
+
+Don't log:
+
+- The `document_bytes`
+- The `prior_extraction` (it may contain PII before the human review even ran)
+- The full exception `__str__()` if you're not sure what's in the body field
+
+Our error classes are careful not to embed document content in messages, but your wrapper code might.
+
+## Where to go next
+
+<CardGroup cols={2}>
+  <Card title="Pricing" icon="credit-card" href="/awaitverify/pricing">
+    How balance + the InsufficientBalanceError prevent surprise charges.
+  </Card>
+  <Card title="Security" icon="lock" href="/awaitverify/security">
+    Why our exception messages and our audit log never carry response content.
+  </Card>
+</CardGroup>

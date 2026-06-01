@@ -58,6 +58,19 @@
             ]
           },
           {
+            "group": "AwaitVerify",
+            "pages": [
+              "awaitverify/overview",
+              "awaitverify/quickstart",
+              "awaitverify/flows",
+              "awaitverify/response-schemas",
+              "awaitverify/providers",
+              "awaitverify/pricing",
+              "awaitverify/security",
+              "awaitverify/errors"
+            ]
+          },
+          {
             "group": "Routing",
             "pages": [
               "routing/overview"

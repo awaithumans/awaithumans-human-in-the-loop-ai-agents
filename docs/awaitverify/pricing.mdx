@@ -1,0 +1,98 @@
+---
+title: "Pricing"
+description: "Per page billing. Standard and Express priority. Top-up via Stripe. No charge for failed tasks."
+---
+
+AwaitVerify bills per page reviewed. No subscriptions, no minimums, no markup on the AI verifier in Flow C.
+
+## Rates
+
+| Priority | Per page | When to use |
+|---|---|---|
+| **Standard** | $0.80 | Default. Reviewer SLA target: under 24 hours, typically under 4 hours during business hours. |
+| **Express** | $1.60 (2×) | When you need a faster turnaround. Reviewer SLA target: under 1 hour, with priority routing. |
+
+Selected per call:
+
+```python
+result = await verify_document(
+    document_path="urgent-contract.pdf",
+    response_schema=Summary,
+    task_description="...",
+    priority="high",   # "high" = Express; default is "standard"
+)
+```
+
+## What counts as a page
+
+After we rasterize the document, one rendered page = one billed page. So:
+
+| Input | Page count |
+|---|---|
+| Single PNG / JPEG / single-page PDF | 1 |
+| Multi-page PDF (N pages) | N |
+| Multi-page TIFF (N frames) | N |
+| DOCX / XLSX / PPTX | The page count of the LibreOffice-rendered PDF |
+
+We cap at 100 pages per call. If you have a 500-page document, split it.
+
+## What doesn't get billed
+
+- **Failed tasks.** If the SDK can't load the document, if the OSS reviewer service is unreachable, or if the reviewer cancels the task before submitting, you're not billed. The pre-check happens before the debit.
+- **AI verifier loops in Flow C.** If the verifier disagrees and the task re-routes to a second human, the second review is included in the original page-count charge.
+- **Tasks that time out.** If no reviewer submits before `timeout_seconds`, the task expires and you're not billed.
+- **Provider calls in Flow B.** Your OpenAI / Reducto / Azure calls run on your machine with your credentials. We don't see them, we don't pass them through.
+
+## How balance works
+
+Sign up gives you a small free credit so you can run your first few smoke tests. After that you top up.
+
+- Open [app.awaithumans.dev/billing](https://app.awaithumans.dev/billing).
+- Pick an amount, pay with a card via Stripe.
+- The credit lands within seconds.
+
+Balance is checked at task creation time. If you don't have enough to cover the estimated cost of the call (`page_count × rate`), the call fails with `InsufficientBalanceError` before any work happens.
+
+## Low-balance warnings
+
+Configure a threshold from the billing page. When a debit takes your balance below the threshold for the first time, we send one email warning. The email contains a top-up link. No spam, one shot, you re-arm the warning by topping up.
+
+For programmatic monitoring, the `verify_document()` response includes a `low_balance_crossed` flag on the underlying managed task (read it from the `AwaitHumans` client if you need it):
+
+```python
+# Coming in v0.2: track the flag via the client.audit() API.
+# For v0.1 use the email threshold.
+```
+
+## Errors related to billing
+
+`InsufficientBalanceError` is raised when the pre-flight check fails:
+
+```python
+from awaithumans.awaitverify import InsufficientBalanceError
+
+try:
+    result = await verify_document(...)
+except InsufficientBalanceError as exc:
+    # exc.balance_cents: current balance
+    # exc.required_cents: what the call needed
+    # exc.docs_path: points back to this page
+    print(f"Add ${(exc.required_cents - exc.balance_cents) / 100:.2f} of credit at app.awaithumans.dev/billing")
+```
+
+The exception's `docs_path` field is `"insufficient-balance"`, so you can route users to the right help page from your own UI.
+
+## Enterprise / volume
+
+Above $5,000/month or specific compliance terms (BAA, SCC, audit-log retention beyond 30 days), email `enterprise@awaithumans.dev`. We do prepaid credits with custom invoicing and operator-grant transactions for the test sandbox.
+
+## Where to go next
+
+<CardGroup cols={2}>
+  <Card title="Errors" icon="circle-exclamation" href="/awaitverify/errors">
+    Every error class including InsufficientBalanceError + how to recover.
+  </Card>
+  <Card title="Security" icon="lock" href="/awaitverify/security">
+    What we retain about your billing (timestamps + amounts) vs. what we don't (response content).
+  </Card>
+</CardGroup>

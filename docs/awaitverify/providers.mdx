@@ -1,0 +1,206 @@
+---
+title: "Flow B providers"
+description: "Providers the SDK can run on your machine to produce an initial extraction. Your credentials never leave your process."
+---
+
+Flow B runs an extractor on your machine before the human review. The SDK calls the provider with your credentials, gets a structured extraction back, and ships both the document and the extraction to the reviewer.
+
+This page covers the providers we ship out of the box, the extras you install for each, and the minimum config to use them.
+
+## The contract
+
+Every provider type plugs into the same `extraction=` parameter:
+
+```python
+from awaithumans import verify_document
+from awaithumans.providers import OpenAIExtraction   # or whichever
+
+result = await verify_document(
+    document_path="invoice.pdf",
+    response_schema=Invoice,
+    extraction=OpenAIExtraction(
+        model="gpt-4o",
+        prompt="Extract invoice number and total in cents.",
+    ),
+    task_description="...",
+)
+```
+
+The SDK validates the provider output against your `response_schema` locally before sending. If the provider returns malformed JSON or fields that don't match, you get an `ExtractionFailedError` and nothing is sent to the reviewer (no charge).
+
+## LLM providers (vision capable)
+
+These read the document image directly and return structured output matching your schema.
+
+### OpenAI
+
+```bash
+pip install "awaithumans[awaitverify,awaitverify-openai]"
+```
+
+```python
+from awaithumans.providers import OpenAIExtraction
+
+extraction = OpenAIExtraction(
+    model="gpt-4o",                # or any vision-capable model
+    prompt="Extract X, Y, Z. Return JSON matching the schema.",
+    api_key=None,                  # defaults to OPENAI_API_KEY env var
+)
+```
+
+Reads `OPENAI_API_KEY` from your environment if `api_key=` isn't passed. Uses OpenAI's structured-output mode (response_format=json_schema) to guarantee the output matches your Pydantic schema.
+
+### Anthropic (Claude)
+
+```bash
+pip install "awaithumans[awaitverify,awaitverify-anthropic]"
+```
+
+```python
+from awaithumans.providers import AnthropicExtraction
+
+extraction = AnthropicExtraction(
+    model="claude-3-5-sonnet-20241022",
+    prompt="Extract X, Y, Z.",
+    api_key=None,                  # defaults to ANTHROPIC_API_KEY
+)
+```
+
+Uses Claude's tool-use API with your `response_schema` as the tool schema; the tool call response gets validated against Pydantic.
+
+### Azure OpenAI
+
+```bash
+pip install "awaithumans[awaitverify,awaitverify-azure-openai]"
+```
+
+```python
+from awaithumans.providers import AzureOpenAIExtraction
+
+extraction = AzureOpenAIExtraction(
+    deployment="gpt-4o-deployment-name",
+    endpoint="https://your-resource.openai.azure.com/",
+    api_version="2024-08-01-preview",
+    prompt="Extract X, Y, Z.",
+    api_key=None,                  # defaults to AZURE_OPENAI_API_KEY
+)
+```
+
+Same code path as OpenAI but pointed at your Azure deployment. Useful for customers on Azure-only data-residency requirements.
+
+## Document extraction providers (SaaS)
+
+These do OCR + layout analysis and return structured JSON. Pair them with a `StructuringConfig` to map the raw extraction to your Pydantic schema.
+
+### Reducto
+
+```bash
+pip install "awaithumans[awaitverify,awaitverify-reducto]"
+```
+
+```python
+from awaithumans.providers import ReductoExtraction, OpenAIStructuring
+
+extraction = ReductoExtraction(
+    api_key=None,                  # defaults to REDUCTO_API_KEY
+    structuring=OpenAIStructuring(
+        model="gpt-4o-mini",       # used to map Reducto output to your schema
+        api_key=None,
+    ),
+)
+```
+
+Reducto's `/extract` endpoint returns structured data; the `StructuringConfig` is the LLM that maps it to your specific Pydantic shape. Best for documents with complex layouts (multi-column, mixed text + tables).
+
+### Azure Document Intelligence
+
+```bash
+pip install "awaithumans[awaitverify,awaitverify-azure-di]"
+```
+
+```python
+from awaithumans.providers import AzureDIExtraction, OpenAIStructuring
+
+extraction = AzureDIExtraction(
+    endpoint="https://your-resource.cognitiveservices.azure.com/",
+    api_key=None,                  # defaults to AZURE_DI_API_KEY
+    model_id="prebuilt-invoice",   # or prebuilt-document, prebuilt-receipt, etc.
+    structuring=OpenAIStructuring(model="gpt-4o-mini"),
+)
+```
+
+Best for documents that match one of Azure's prebuilt extraction models (invoices, receipts, IDs).
+
+## Local providers (no API calls)
+
+Run entirely on your machine. No credentials, no per-request cost. Slower, depending on your hardware.
+
+### Docling
+
+```bash
+pip install "awaithumans[awaitverify,awaitverify-docling]"
+```
+
+```python
+from awaithumans.providers import DoclingExtraction, OpenAIStructuring
+
+extraction = DoclingExtraction(
+    structuring=OpenAIStructuring(model="gpt-4o-mini"),
+)
+```
+
+Open-source OCR + layout analysis from IBM. Runs locally. The structuring step still uses an LLM unless you swap in a deterministic mapper.
+
+### PaddleOCR
+
+```bash
+pip install "awaithumans[awaitverify,awaitverify-paddleocr]"
+```
+
+```python
+from awaithumans.providers import PaddleOCRExtraction, OpenAIStructuring
+
+extraction = PaddleOCRExtraction(
+    structuring=OpenAIStructuring(model="gpt-4o-mini"),
+)
+```
+
+Open-source OCR. Best for plain-text documents where you only need text extraction (then structure with an LLM).
+
+## Comparison
+
+| Provider | What it does | Best for | Cost model |
+|---|---|---|---|
+| OpenAI | Vision LLM, structured output | Anything text or table | Per token |
+| Anthropic | Vision LLM, tool use | Anything text or table | Per token |
+| Azure OpenAI | Vision LLM via Azure | Azure-only deployments | Per token |
+| Reducto | SaaS OCR + layout | Complex layouts, multi-column | Per page |
+| Azure DI | SaaS OCR + prebuilt models | Invoices, receipts, IDs | Per page |
+| Docling | Local OCR + layout | Air-gapped envs, batch jobs | Compute only |
+| PaddleOCR | Local OCR | Plain text, batch jobs | Compute only |
+
+## Credentials never leave your machine
+
+The SDK calls every provider from your Python process. Your `OPENAI_API_KEY`, `REDUCTO_API_KEY`, etc. are read from your environment (or passed to the constructor) and used to make the provider request directly. AwaitVerify's managed backend never sees provider credentials. We only receive:
+
+- The encrypted document fragments
+- The extracted result (after your provider returned it)
+- The task metadata you attach
+
+## What if my provider isn't on the list?
+
+Two options:
+
+1. **Use Flow A.** Run your provider on your machine, then pass the result as `prior_extraction=YourModel(...)`. We don't need to support your provider directly; we just need the Pydantic instance.
+2. **Open an issue.** New providers land based on real demand. PR welcome too. The provider interface is in `awaithumans.providers.base`.
+
+## Where to go next
+
+<CardGroup cols={2}>
+  <Card title="The three flows" icon="route" href="/awaitverify/flows">
+    Flow A (you bring the extraction) vs Flow B (SDK runs the provider).
+  </Card>
+  <Card title="Response schemas" icon="brackets-curly" href="/awaitverify/response-schemas">
+    The Pydantic shape determines the provider's output schema too.
+  </Card>
+</CardGroup>
