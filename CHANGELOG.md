@@ -12,7 +12,24 @@ into a versioned release when tagged.
 
 ## [Unreleased]
 
-### Added
+---
+
+## [0.1.8] — 2026-06-02
+
+AwaitVerify launch release. The first version that ships every layer of the paid managed product end-to-end: client-side encrypted document fragmentation, managed decrypt proxy, nested-Pydantic form rendering, per-page review carousel, pre-filled responses, immediate post-submit redaction, and a complete Mintlify docs section. Smoke test green from `verify_document()` → reviewer dashboard → typed Pydantic result back into the customer's process, with the response content destroyed everywhere except inside that process after the round-trip.
+
+### Added (since 0.1.7)
+
+- **Reviewer decrypt-and-stream proxy.** Managed exposes `GET /api/v1/awaitverify/tasks/{task_id}/fragments/{index}/view?token=...` that unwraps the per-task DEK server-side, fetches the encrypted fragment from Azure Blob, decrypts in-memory, and streams plaintext PNG to the reviewer's browser. Wrapped DEK never leaves the managed process; reviewer dashboard never holds decryption capability. Path-bound HMAC-signed tokens expire with the task. Replaces the previous "send raw Azure SAS URLs to the dashboard" approach that produced broken-image icons because fragments are AES-256-GCM ciphertext.
+- **Spreadsheet-style table rendering for `list[BaseModel]` response fields.** The dashboard now renders nested Pydantic models as indented sections (`object_group`) and lists of objects as editable spreadsheet tables (`repeatable_group`) with add/remove row controls. JSON schema walker on the managed side recurses through `$ref` resolution, `Optional[X]` flattening, and emits the right field kind for every shape, falling back to long_text JSON only on deeply-nested (>6 levels) or unsupported (multi-variant union) cases.
+- **Pre-filled review forms.** When a customer passes `prior_extraction=YourModel(...)` (Flow A) or `extraction=ExtractionConfig(...)` (Flow B), the SDK now forwards the structured result through managed to the OSS dashboard. The reviewer's form mounts with those values pre-populated; they edit-in-place rather than typing from scratch. Closes the Phase 3 wiring gap that previously dropped the extraction with a warning log.
+- **Multi-image carousel.** The reviewer dashboard now groups all of a task's fragment images into a single carousel with prev/next controls, page-of-N counter, keyboard arrow navigation, and a full-screen lightbox button. Right-click and drag-to-save are disabled on every fragment image as a defense-in-depth layer against casual exfiltration.
+- **Page-grouped carousel for multi-page documents.** When the form_definition image fields carry `page_index` / `fragment_in_page` / `page_count` metadata (always set for multi-page AwaitVerify tasks), the dashboard renders a per-page sub-carousel with a page selector. Reviewer navigates fragments within a page (← / →) or jumps between pages (PageUp / PageDown). Lightbox header shows "Page N of M, view K of 5" context.
+- **Post-submit response redaction.** When a reviewer hits Submit on an AwaitVerify task: (1) the OSS dashboard immediately switches to a "Response delivered, content redacted" panel — no window for shoulder-surfing, (2) the OSS server nulls its copy of `response_json` after successful callback delivery to managed, (3) managed's `get_task_state` claim-and-nulls the response in the same SQL transaction that returns it to the customer's polling SDK, (4) the wrapped DEK is destroyed, (5) encrypted fragment blobs are deleted from Azure Blob. Net result: after `verify_document()` returns, response content lives only inside the customer's Python process. Audit trail (timestamps + customer/task IDs + reviewer attribution + billing) stays intact. The redact behavior is gated on a `redact_response_after_submit` flag — generic OSS HITL tasks created by self-hosted users keep the existing always-visible response view.
+- **Symmetric fragment masks.** Mask #2 previously blacked out 75% of the image (left three-quarters), leaving only the right quarter visible to the reviewer. Fixed to mirror mask #1 so every fragment leaks approximately 50% of the page. The carousel feels evenly weighted across the five masks.
+- **AwaitVerify Mintlify documentation.** Eight-page section under `/awaitverify/`: overview, quickstart, the three flows, response schemas (including nested + multi-page patterns), Flow B provider extras, pricing, security model (envelope encryption, decrypt proxy, redaction lifecycle), and a full error reference with `error_code` pattern-matching guidance. Navigation group lives between Channels and Routing on docs.awaithumans.dev.
+
+### Added (Phase 2 + Phase 3 SDK, accumulated since 0.1.7)
 
 - **`AwaitHumans` client class.** Initialize once with your API key and
   reuse across calls instead of passing credentials per call:
@@ -133,6 +150,21 @@ into a versioned release when tagged.
 - **PDF rasterization at 300 DPI explicitly** (was the pdf2image
   default of 200). Preserves small handwritten content (T12C3 vs
   712C3 readability).
+
+### Server + dashboard reliability (since 0.1.7)
+
+- **Postgres tz-aware datetime columns.** Replaced naive `TIMESTAMP` columns with `TIMESTAMP WITH TIME ZONE` across the OSS server's task tables. Self-hosters on Postgres no longer hit `asyncpg.DataError: can't subtract offset-naive and offset-aware datetimes` on the timeout / webhook schedulers. Includes an idempotent startup migration that ALTERs existing columns in place. SQLite path unaffected.
+- **Alembic `disable_existing_loggers=False`.** alembic's default behavior was silently disabling every logger created before `init_db()`, swallowing the post-migration warnings + the production setup banner. One-line fix in `alembic/env.py`.
+- **Lifespan startup tracebacks.** Wrapped the entire FastAPI lifespan body so any exception during `init_db()`, scheduler creation, or first-run-token generation logs a full traceback before re-raising. Previously surfaced as a silent exit-3 on Azure Container Apps + similar runtimes. Both `logger.error` and direct `sys.stderr.write` channels emit the traceback, so at least one survives any log-config drift.
+- **`awaithumans serve` CLI command.** Production entrypoint that refuses to start unless `AWAITHUMANS_DATABASE_URL` or `AWAITHUMANS_DB_PATH` is explicitly set. The `Dockerfile` `CMD` switched from `awaithumans dev` to `awaithumans serve`; the bare image still boots into SQLite-on-volume mode because the existing `ENV AWAITHUMANS_DB_PATH=/var/lib/awaithumans/awaithumans.db` line satisfies the check. `awaithumans dev` remains the local-development command.
+- **Ephemeral SQLite warning.** When production mode runs on SQLite without `AWAITHUMANS_ALLOW_EPHEMERAL_DB=true`, the lifespan now emits a loud multi-line WARNING explaining the data-loss risk and pointing at the two fixes (Postgres or volume mount). Silent in dev and silent in prod-on-Postgres.
+- **GHCR rename sweep.** Canonical image is now `ghcr.io/awaithumans/awaithumans-human-in-the-loop-ai-agents`. The legacy short name `ghcr.io/awaithumans/awaithumans` is frozen at a pre-rename build and no longer updates. README, docker-compose.yml, and self-hosting docs all point at the renamed repo.
+- **Brand references unified on `awaithumans.dev`.** Replaced every `awaithumans.com` reference across the repo (READMEs, package metadata, docs) with `awaithumans.dev` so external links resolve to the real surface.
+
+### Maintenance
+
+- Python SDK bumped to `0.1.8`. TypeScript SDK stays at `0.1.8` (no user-facing TS changes this batch).
+- Docker image republished as `ghcr.io/awaithumans/awaithumans-human-in-the-loop-ai-agents:v0.1.8` (also retagged `:latest`).
 
 ---
 
