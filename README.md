@@ -298,6 +298,45 @@ channels — from one image.
 
 ---
 
+## Managed: AwaitVerify
+
+If your use case is **document verification** and you would rather not run the infrastructure or recruit reviewers yourself, [**AwaitVerify**](https://awaithumans.dev/awaitverify) is the managed service we sell on top of this primitive. We provide the humans, the ops, and the SLA. You keep the same one-function-call integration.
+
+```python
+from awaithumans import verify_document  # also aliased as awaitVerify
+from pydantic import BaseModel
+
+class LineItem(BaseModel):
+    sku: str
+    qty: int
+    unit_price_cents: int
+
+class Invoice(BaseModel):
+    invoice_number: str
+    total_cents: int
+    line_items: list[LineItem]
+
+result = await verify_document(
+    document_path="./invoice.pdf",
+    prior_extraction={
+        "invoice_number": "INV-4471",
+        "total_cents": 12000,
+        "line_items": [...],
+    },
+    response_schema=Invoice,
+    priority="standard",                          # or "high" for the Express queue
+    api_key=os.environ["AWAITHUMANS_API_KEY"],
+)
+```
+
+**$0.80 per page** standard. **$0.60** at 1,000+ pages/month. **Custom** at 10,000+. The Express SLA (30-minute target during Mon-Fri 8am-8pm ET, best-effort outside) runs at 2x the rate and is triggered by `priority="high"`.
+
+The SDK fragments the document **client-side** into five masked views before any upload. The full unfragmented document never leaves your environment. Fragments are encrypted in transit (TLS 1.2+) and at rest (AES-256-GCM with per-task data keys destroyed on reviewer submit).
+
+[**Sign up at app.awaithumans.dev**](https://app.awaithumans.dev) · [**Pricing**](https://awaithumans.dev/awaitverify#pricing) · [**Security**](https://awaithumans.dev/awaitverify/security)
+
+---
+
 ## Architecture
 
 - **Core primitive:** one function, `await_human()` / `awaitHuman()`,
