@@ -1,0 +1,199 @@
+---
+title: "Response schemas"
+description: "What Pydantic shapes the reviewer can edit comfortably. Primitives, nested models, lists of objects, multi-page patterns."
+---
+
+The reviewer's form is generated from your `response_schema` automatically. The shape you pass determines what they type into. This page lists every shape that renders well, and what falls back to a JSON textarea.
+
+## Primitives
+
+Map cleanly to form fields.
+
+```python
+from enum import Enum
+from pydantic import BaseModel, Field
+
+
+class Priority(str, Enum):
+    LOW = "low"
+    MEDIUM = "medium"
+    HIGH = "high"
+
+
+class TicketSummary(BaseModel):
+    subject: str = Field(max_length=120)         # short_text
+    description: str                             # long_text (no max_length)
+    customer_count: int                          # number input
+    refund_amount: float                         # number input (decimals)
+    has_attachments: bool                        # switch (Yes/No)
+    priority: Priority                           # single_select dropdown
+```
+
+| Pydantic type | Reviewer sees |
+|---|---|
+| `str` with `max_length <= 200` | Single-line text input |
+| `str` with no max or `max_length > 200` | Multi-line textarea |
+| `int`, `float` | Number input (with decimal support for floats) |
+| `bool` | Yes/No toggle |
+| `Enum` of strings | Dropdown of the enum values |
+
+## Optional fields
+
+`Optional[X]` flattens to the underlying type. The form field is unrequired but renders as the inner kind, not as a generic JSON textarea.
+
+```python
+from typing import Optional
+
+
+class Receipt(BaseModel):
+    vendor: str                                  # required short_text
+    tip_cents: Optional[int] = None              # optional number input
+    notes: Optional[str] = Field(                # optional multi-line
+        default=None,
+        description="Anything that wouldn't fit the structured fields above"
+    )
+```
+
+## Nested objects
+
+Render as an indented section with the inner fields stacked vertically. Useful for grouping related data.
+
+```python
+class Address(BaseModel):
+    street: str = Field(max_length=120)
+    city: str = Field(max_length=80)
+    postal_code: str = Field(max_length=20)
+
+
+class Person(BaseModel):
+    full_name: str = Field(max_length=80)
+    date_of_birth: str                           # ISO 8601 date
+    address: Address                             # nested → object_group
+```
+
+## Lists of objects (the killer feature)
+
+`list[BaseModel]` becomes a **spreadsheet-style editable table** on the reviewer's dashboard. One column per property of the element model. The reviewer adds rows, edits cells inline, removes rows.
+
+```python
+class LineItem(BaseModel):
+    description: str = Field(max_length=120)
+    quantity: int
+    unit_price_cents: int
+    total_cents: int
+
+
+class Invoice(BaseModel):
+    invoice_number: str = Field(max_length=64)
+    issued_at: str                               # ISO 8601 date
+    total_cents: int
+    line_items: list[LineItem]                   # → spreadsheet table
+```
+
+What the reviewer sees for `line_items`:
+
+```
+description           | quantity | unit_price_cents | total_cents
+----------------------|----------|------------------|------------
+Widget A              | 2        | 2500             | 5000
+Widget B              | 3        | 2500             | 7500
+[+ Add row]
+```
+
+This is the right shape for invoices, receipts, claim line items, table rows from scanned forms, any data that's intrinsically tabular.
+
+## Multi-page response patterns
+
+Three common ways to structure a response for a multi-page document. Pick the one that matches your downstream code; the SDK doesn't enforce any particular pattern.
+
+### Pattern 1: Flat list across all pages (simplest)
+
+```python
+class Invoice(BaseModel):
+    invoice_number: str
+    line_items: list[LineItem]   # reviewer aggregates from every page
+```
+
+The reviewer sees one spreadsheet table with all line items. Easy to consume downstream. Loses per-page provenance.
+
+### Pattern 2: Page-keyed structure
+
+```python
+class PageData(BaseModel):
+    page_title: str
+    rows: list[LineItem]
+
+
+class Document(BaseModel):
+    pages: list[PageData]         # one entry per page
+```
+
+Renders as a `repeatable_group` (spreadsheet) where each row is itself a section (the per-page object). The reviewer adds one row per page and fills in the section per row. Useful when your downstream code reasons about pages explicitly.
+
+### Pattern 3: Top-level totals + nested table
+
+```python
+class Invoice(BaseModel):
+    invoice_number: str
+    total_cents: int                  # roll-up across pages
+    line_items: list[LineItem]        # flat table, reviewer aggregates
+
+
+class Submission(BaseModel):
+    documents: list[Invoice]          # one invoice per document if you batch
+```
+
+Use when one customer call submits a batch of related documents.
+
+## Fields and constraints we recognize
+
+| Pydantic feature | Effect on the form |
+|---|---|
+| `Field(description="...")` | Becomes the hint text under the field |
+| `Field(title="...")` | Becomes the field label (overrides the property name) |
+| `Field(max_length=N)` | Short vs long text rendering (≤200 → short) |
+| `Field(min_length=N)` | Validation hint, shown on submit if violated |
+| `Field(default=...)` | Used as the field's initial value if no `prior_extraction` is supplied |
+
+## What doesn't render well (yet)
+
+Some shapes fall back to a long_text JSON textarea. The reviewer can still submit (by typing JSON), but the UX isn't ideal. v1 limitations:
+
+- `Union[str, int]` and similar multi-variant unions
+- Discriminated unions
+- Self-referential schemas (a model that references itself)
+- Schemas nested deeper than 6 levels
+
+For these, restructure your schema (often flattening one level is enough) or open an issue describing your case. We add coverage based on real usage.
+
+## Examples
+
+The smoke test we use in CI is a real reference for what works:
+
+```python
+from pydantic import BaseModel, Field
+
+
+class LineItem(BaseModel):
+    description: str = Field(description="What the line is for")
+    amount_cents: int = Field(description="Price in cents")
+
+
+class InvoiceExtraction(BaseModel):
+    invoice_number: str
+    total_cents: int
+    line_items: list[LineItem]
+```
+
+A reviewer takes ~30 seconds to verify a 5-line invoice with this shape.
+
+## Where to go next
+
+<CardGroup cols={2}>
+  <Card title="The three flows" icon="route" href="/awaitverify/flows">
+    Combine schemas with Flow A (prior_extraction) for pre-filled forms.
+  </Card>
+  <Card title="Providers" icon="plug" href="/awaitverify/providers">
+    Flow B: which provider you pick affects how the extraction maps to your schema.
+  </Card>
+</CardGroup>

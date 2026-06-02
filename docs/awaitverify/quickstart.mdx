@@ -1,0 +1,144 @@
+---
+title: "AwaitVerify quickstart"
+description: "Install, make your first verify_document() call, and get a typed result back in five minutes."
+---
+
+By the end of this page you'll have:
+
+- An AwaitVerify API key.
+- A Python script that uploads a document and waits for a human to verify the extraction.
+- That extraction flowing back into your code as a typed Pydantic instance.
+
+## 1. Install the extras
+
+```bash
+pip install "awaithumans[awaitverify]"
+```
+
+The `awaitverify` extra adds Pillow (raster image handling), pdf2image (PDF rasterization), and cryptography (client-side AES-256-GCM encryption). The base `awaithumans` package stays lightweight; you only opt into these when you use AwaitVerify.
+
+<Note>
+For Flow B (the SDK runs an extractor on your machine first), add the provider extra too:
+
+```bash
+pip install "awaithumans[awaitverify,awaitverify-openai]"      # OpenAI
+pip install "awaithumans[awaitverify,awaitverify-anthropic]"   # Anthropic
+pip install "awaithumans[awaitverify,awaitverify-reducto]"     # Reducto
+pip install "awaithumans[awaitverify,awaitverify-azure-di]"    # Azure Document Intelligence
+```
+
+[Full provider list →](/awaitverify/providers)
+</Note>
+
+## 2. Get an API key
+
+Sign in at [app.awaithumans.dev](https://app.awaithumans.dev), open the **API keys** page, click **Create key**. Copy the `ah_sk_live_...` value once; you can't see it again.
+
+Set it as an environment variable:
+
+```bash
+export AWAITHUMANS_API_KEY="ah_sk_live_..."
+```
+
+The dashboard also shows your current balance. New accounts start with a free trial credit. [Pricing →](/awaitverify/pricing)
+
+## 3. Define your response shape
+
+The reviewer is going to fill out a form that matches your Pydantic schema. Define what you want back:
+
+```python
+from pydantic import BaseModel, Field
+
+
+class LineItem(BaseModel):
+    description: str = Field(description="What the line is for")
+    amount_cents: int = Field(description="Price in cents")
+
+
+class Invoice(BaseModel):
+    invoice_number: str
+    total_cents: int
+    line_items: list[LineItem]
+```
+
+Anything that's a `BaseModel` becomes a section. Anything that's a `list[BaseModel]` becomes a spreadsheet-style editable table on the reviewer's dashboard. [Schema patterns →](/awaitverify/response-schemas)
+
+## 4. Call verify_document
+
+```python
+import asyncio
+from awaithumans import verify_document
+
+async def main() -> None:
+    result = await verify_document(
+        document_path="invoice.pdf",
+        task_description=(
+            "Extract the invoice number, total in cents, and every "
+            "line item. If a line item amount is illegible, leave the "
+            "row in but flag the description with [unclear]."
+        ),
+        response_schema=Invoice,
+        timeout_seconds=24 * 3600,
+    )
+
+    print(f"Invoice {result.invoice_number} totals ${result.total_cents / 100:.2f}")
+    for item in result.line_items:
+        print(f"  {item.description}: ${item.amount_cents / 100:.2f}")
+
+asyncio.run(main())
+```
+
+`verify_document()` is async; the SDK long-polls the managed backend until the reviewer submits. For a synchronous flow, wrap the call:
+
+```python
+from awaithumans import verify_document_sync
+
+result = verify_document_sync(
+    document_path="invoice.pdf",
+    task_description="...",
+    response_schema=Invoice,
+    timeout_seconds=24 * 3600,
+)
+```
+
+## 5. The reviewer's side
+
+The moment your script hits the managed backend, the task lands in our reviewer dashboard:
+
+1. A reviewer opens the task.
+2. They see the document fragments (five masked views per page, decrypted and streamed through our proxy on demand).
+3. The form is pre-filled if you supplied `prior_extraction=` or `extraction=`; otherwise it's blank.
+4. They edit cells, add rows, correct what the model got wrong, and click **Submit**.
+
+Your `verify_document()` call returns the typed `Invoice` instance with the reviewer's corrections.
+
+## 6. Multi-page documents
+
+PDFs, multi-page TIFF, and Office docs (DOCX, XLSX, PPTX via LibreOffice) all work without extra config. The SDK detects the page count, rasterizes at 300 DPI, and uploads each page's fragments. The reviewer's dashboard shows a per-page carousel.
+
+```python
+result = await verify_document(
+    document_path="five-page-contract.pdf",   # any page count up to 100
+    task_description="Extract the parties, dates, and signed amounts.",
+    response_schema=ContractSummary,
+)
+```
+
+Billing scales linearly: `$0.80 × page_count` for standard priority.
+
+## Where to go next
+
+<CardGroup cols={2}>
+  <Card title="The three flows" icon="route" href="/awaitverify/flows">
+    Skip blind human review with Flow A or Flow B. Add an AI verifier with Flow C.
+  </Card>
+  <Card title="Response schemas" icon="brackets-curly" href="/awaitverify/response-schemas">
+    Patterns for nested models, tables, optionals, and multi-page response shapes.
+  </Card>
+  <Card title="Security" icon="lock" href="/awaitverify/security">
+    What the reviewer sees, what they don't, how the document stays encrypted.
+  </Card>
+  <Card title="Errors" icon="circle-exclamation" href="/awaitverify/errors">
+    Every exception, what triggers it, and the right fix.
+  </Card>
+</CardGroup>

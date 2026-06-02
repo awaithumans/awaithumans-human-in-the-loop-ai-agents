@@ -1,0 +1,98 @@
+---
+title: "AwaitVerify"
+description: "Managed human verification of automated document extraction. API in, typed Pydantic out."
+---
+
+AwaitVerify is the paid managed product on top of `awaithumans`. You call one function, we route the document through a human reviewer (or your AI extractor, then a human), and your agent gets back a typed Pydantic instance.
+
+```python
+result = await verify_document(
+    document_path="invoice.pdf",
+    task_description="Extract line items and totals.",
+    response_schema=Invoice,
+    prior_extraction=Invoice(...),    # optional: your initial guess
+)
+# result is an Invoice instance with the fields the reviewer confirmed/corrected.
+```
+
+## Who AwaitVerify is for
+
+Engineers building agents that have to read paper forms, handwritten tables, scanned IDs, multi-page contracts, claim PDFs, or any other document where an LLM alone is not safe enough yet. You wire `verify_document(...)` into your pipeline; the human review happens out-of-band; you get the typed result back as if it were a synchronous function call.
+
+The three flows we support, in one table:
+
+| Flow | When to use it | How it works |
+|---|---|---|
+| **A. Human only** | You already extracted the data (your code, your model, your OCR). | Pass `prior_extraction=YourModel(...)`. Reviewer verifies it against the document, corrects in place. |
+| **B. Model then human** | You don't have an extractor yet but you have an OpenAI / Anthropic / Reducto / Azure DI key. | Pass `extraction=OpenAIExtraction(model=..., prompt=...)`. SDK runs the model on your machine, sends both the document and the extraction to the reviewer. |
+| **C. Human then model** | You want an AI verifier loop on what the human typed. | Pass `verifier=VerifierConfig(...)`. After the human submits, the verifier rechecks the response. If it disagrees, the task re-routes back to a human. |
+
+[Flow details with code samples →](/awaitverify/flows)
+
+## What makes it different from "just call an LLM"
+
+1. **A real human is in the loop.** Founder pool today, then platform reviewers as we scale. The human sees the document and the extraction side by side and corrects the cells that the model got wrong.
+2. **Typed end-to-end.** You hand us a Pydantic model. You get back an instance of that model. No JSON twiddling, no string parsing, no "did GPT hallucinate this field" doubt.
+3. **Document never leaves your machine intact.** The SDK fragments the document into masked views client-side and encrypts each fragment with AES-256-GCM before upload. The reviewer sees five partial views per page; the full document is reconstructable only inside your Python process. [Security details →](/awaitverify/security)
+4. **You pay per page reviewed, not per request.** $0.80 standard, $1.60 Express. Failed tasks aren't billed. [Pricing →](/awaitverify/pricing)
+
+## Quickstart
+
+Install the extras, set your API key, call `verify_document`. [Five-minute walkthrough →](/awaitverify/quickstart)
+
+```bash
+pip install "awaithumans[awaitverify]"
+```
+
+```python
+import os
+from awaithumans import verify_document
+from pydantic import BaseModel
+
+os.environ["AWAITHUMANS_API_KEY"] = "ah_sk_live_..."
+
+class Receipt(BaseModel):
+    vendor: str
+    total_cents: int
+
+result = await verify_document(
+    document_path="receipt.png",
+    task_description="Confirm vendor name and total in cents.",
+    response_schema=Receipt,
+)
+print(result.vendor, result.total_cents)
+```
+
+## Multi-page documents
+
+PDFs, multi-page TIFFs, and DOCX files with multiple pages all work. The SDK rasterizes each page at 300 DPI, fragments each page into five masked views, and uploads. The reviewer sees a per-page carousel and verifies the extraction across pages.
+
+Cap at v1: 100 pages per call. Billing is per page reviewed (page count after rasterization).
+
+## API key
+
+Get your key from `app.awaithumans.dev/keys`. Set it as `AWAITHUMANS_API_KEY`, or pass an `AwaitHumans` client explicitly:
+
+```python
+from awaithumans import AwaitHumans
+
+client = AwaitHumans(api_key="ah_sk_live_...")
+result = await client.verify_document(...)
+```
+
+## Where to go next
+
+<CardGroup cols={2}>
+  <Card title="Quickstart" icon="rocket" href="/awaitverify/quickstart">
+    Install, first call, get a typed result back in five minutes.
+  </Card>
+  <Card title="The three flows" icon="route" href="/awaitverify/flows">
+    Flow A (human only), Flow B (model then human), Flow C (human then model).
+  </Card>
+  <Card title="Response schemas" icon="brackets-curly" href="/awaitverify/response-schemas">
+    Pydantic patterns including nested models and lists of objects.
+  </Card>
+  <Card title="Security model" icon="lock" href="/awaitverify/security">
+    Fragmentation, AES-256-GCM, the decrypt proxy, post-submit redaction.
+  </Card>
+</CardGroup>

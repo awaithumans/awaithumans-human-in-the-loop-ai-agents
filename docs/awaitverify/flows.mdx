@@ -1,0 +1,172 @@
+---
+title: "The three flows"
+description: "Flow A (human only), Flow B (model then human), Flow C (human then model). When to use each, with code."
+---
+
+`verify_document()` supports three flows. Most customers use Flow A or B; Flow C is the quality loop on top.
+
+## Decision table
+
+| Your situation | Use | Why |
+|---|---|---|
+| You already have an extractor (your code, your model, your OCR). You want a human to verify the output. | **Flow A** | Reviewer sees your extraction and corrects the cells the model got wrong. |
+| You don't have an extractor pipeline but you have an OpenAI / Anthropic / Reducto / Azure DI key. | **Flow B** | The SDK runs the model on your machine using your credentials. Reviewer sees the model output and corrects it. |
+| You want an AI verifier to recheck what the human typed. | **Flow C** (compose with A or B) | If the verifier disagrees with the human, the task re-routes back to a human. |
+
+## Flow A: Human only
+
+You provide the data. The reviewer confirms or corrects it against the document.
+
+```python
+import asyncio
+from pydantic import BaseModel
+from awaithumans import verify_document
+
+
+class Invoice(BaseModel):
+    invoice_number: str
+    total_cents: int
+
+
+async def main() -> None:
+    # Whatever you got out of your OCR / scraper / earlier pipeline step.
+    my_extraction = Invoice(invoice_number="INV-0042", total_cents=12500)
+
+    result = await verify_document(
+        document_path="invoice.pdf",
+        task_description="Confirm or correct the invoice number and total.",
+        response_schema=Invoice,
+        prior_extraction=my_extraction,    # Flow A signal
+    )
+
+    print(f"Reviewer returned: {result}")
+
+
+asyncio.run(main())
+```
+
+What the reviewer sees:
+
+- The document fragments (five masked views per page).
+- A response form pre-filled with `my_extraction`.
+- They edit, then submit.
+
+Best for: KYC pipelines where your model already runs in production but compliance requires a human spot-check on edge cases.
+
+## Flow B: Model then human
+
+You don't have your own extractor yet. The SDK runs one on your machine using your provider credentials, then sends both the document and the extracted result to the reviewer.
+
+```python
+import asyncio
+from pydantic import BaseModel
+from awaithumans import verify_document
+from awaithumans.providers import OpenAIExtraction
+
+
+class Receipt(BaseModel):
+    vendor: str
+    total_cents: int
+    purchase_date: str   # ISO 8601
+
+
+async def main() -> None:
+    result = await verify_document(
+        document_path="receipt.png",
+        task_description="Extract vendor, total in cents, and purchase date.",
+        response_schema=Receipt,
+        extraction=OpenAIExtraction(             # Flow B signal
+            model="gpt-4o",
+            prompt=(
+                "Read this receipt. Return vendor name, total in cents "
+                "(integer), and purchase date in ISO 8601."
+            ),
+        ),
+    )
+
+    print(result.vendor, result.total_cents, result.purchase_date)
+
+
+asyncio.run(main())
+```
+
+Providers we ship out of the box: OpenAI, Anthropic, Azure OpenAI, Reducto, Azure Document Intelligence, Docling (local), PaddleOCR (local). [Full provider list →](/awaitverify/providers)
+
+<Note>
+Your provider credentials never leave your machine. The SDK calls OpenAI / Anthropic / etc. directly from your process; only the extracted result + the encrypted fragments go to AwaitVerify.
+</Note>
+
+Best for: smaller teams who want one library to handle "OCR + human-in-the-loop" rather than wiring two separate vendors.
+
+## Flow C: Human then model (AI verifier loop)
+
+After the human submits, an AI verifier rechecks the response. If it flags a problem, the task re-routes to another human.
+
+```python
+import asyncio
+from pydantic import BaseModel
+from awaithumans import verify_document, VerifierConfig
+
+
+class ContractClause(BaseModel):
+    parties: list[str]
+    effective_date: str
+    auto_renew: bool
+
+
+async def main() -> None:
+    result = await verify_document(
+        document_path="contract.pdf",
+        task_description="Extract parties, effective date, and the auto-renew flag.",
+        response_schema=ContractClause,
+        verifier=VerifierConfig(                  # Flow C signal
+            provider="claude",
+            model="claude-3-5-sonnet-20241022",
+            criteria=(
+                "Verify that auto_renew is True only if the document "
+                "contains 'auto-renew' or 'automatic renewal' near the "
+                "termination clause."
+            ),
+        ),
+    )
+
+    print(result)
+
+
+asyncio.run(main())
+```
+
+Flow C can compose with either Flow A or Flow B. Pass both `prior_extraction=` (or `extraction=`) and `verifier=`; the SDK runs the extraction, the human verifies, then the AI verifier rechecks.
+
+Best for: high-stakes review where a single human reviewer is not enough (regulated compliance, fraud detection).
+
+## What happens between Submit and your return value
+
+The SDK long-polls the managed backend. When the reviewer submits:
+
+1. OSS server records the response, fires the callback to managed.
+2. Managed marks the task `completed`, destroys the wrapped DEK, deletes the encrypted fragments from blob storage.
+3. Your next `poll` call returns the typed response.
+4. Managed nulls its copy of the response in the same transaction.
+
+Net effect: after `verify_document()` returns, the response content lives only inside your Python process. [Security details →](/awaitverify/security)
+
+## Timeouts and retries
+
+`timeout_seconds` defaults to 48 hours and caps at 30 days. If no human submits before the timeout:
+
+- Standard priority: task times out, your `verify_document()` raises `VerifyTimeoutError`. You're not billed.
+- Express priority: same behavior but with a faster (configurable) SLA target. [Pricing →](/awaitverify/pricing)
+
+You can retry by calling `verify_document()` again with the same arguments. The SDK doesn't dedupe automatically; if you need idempotency, pass a stable `idempotency_key=` (the managed backend supports this on the `/tasks` endpoint).
+
+## Where to go next
+
+<CardGroup cols={2}>
+  <Card title="Response schemas" icon="brackets-curly" href="/awaitverify/response-schemas">
+    What Pydantic shapes the reviewer can edit comfortably (and what falls back to JSON).
+  </Card>
+  <Card title="Providers" icon="plug" href="/awaitverify/providers">
+    Flow B providers: OpenAI, Anthropic, Azure, Reducto, Docling, PaddleOCR.
+  </Card>
+</CardGroup>

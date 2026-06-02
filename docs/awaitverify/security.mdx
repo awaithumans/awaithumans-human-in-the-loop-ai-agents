@@ -1,0 +1,138 @@
+---
+title: "Security model"
+description: "Client-side AES-256-GCM fragmentation, decrypt proxy, post-submit redaction, DEK destruction. What we keep, what we don't."
+---
+
+This page is the full story of what happens to the bytes of your document between `verify_document()` and the typed result your code receives back. The short version:
+
+> The full document never reaches AwaitVerify infrastructure intact. The SDK fragments and encrypts client-side; the reviewer sees masked views through a managed decrypt proxy; the response content is destroyed everywhere except your Python process after the round-trip completes.
+
+## What lives where, at every stage
+
+| Stage | What we have | Encrypted? | Survives the round-trip? |
+|---|---|---|---|
+| 1. SDK loads + rasterizes | Raw document (plaintext) | n/a (your machine) | Your process only |
+| 2. SDK fragments + encrypts | Five masked views per page, encrypted | AES-256-GCM, key generated in your process | Ciphertext uploads to Azure Blob |
+| 3. Managed receives upload | Wrapped DEK (only) | KEK-wrapped, KEK derived from PAYLOAD_KEY | Yes, in managed DB |
+| 4. Task POSTed to OSS reviewer | Signed proxy URLs (one per fragment) | URLs are HMAC-signed, content is still ciphertext | URLs expire with the task |
+| 5. Reviewer browser fetches | Plaintext fragment (streamed) | Decrypted server-side, streamed over TLS | Browser memory only |
+| 6. Reviewer submits | Response JSON (plaintext) | TLS in transit | Briefly in OSS DB, briefly in managed DB |
+| 7. Callback delivered to managed | Response forwarded | TLS, HMAC-signed | Yes |
+| 8. SDK polls + gets response | Typed Pydantic instance | TLS | Your process only |
+| 9. **After the round-trip** | Metadata + timestamps + reviewer attribution | n/a | We retain metadata; response content is gone |
+
+## Layer 1: Client-side fragmentation
+
+The SDK runs entirely on your machine. It:
+
+1. Loads the document (PDF, image, or office doc via LibreOffice).
+2. Rasterizes each page at 300 DPI.
+3. For each page, creates five masked views. Each one blacks out approximately 50% of the page using a different mask geometry. No single fragment shows more than half the page.
+4. Encrypts each fragment with a per-task data-encryption key (DEK).
+
+The full document image never leaves your process intact. A reviewer who saw all five fragments still wouldn't reconstruct the original without piecing them together visually, and they only see one at a time in the dashboard carousel.
+
+## Layer 2: Envelope encryption (AES-256-GCM)
+
+Two keys, two layers:
+
+- **DEK (Data Encryption Key)**. 32 bytes, generated fresh per task with `os.urandom(32)` in your SDK process.
+  - Used to encrypt each fragment via AES-256-GCM (`encrypt_fragment(plaintext, dek)`).
+  - Sent to managed wrapped under the KEK (see below). The plaintext DEK never reaches our servers.
+- **KEK (Key Encryption Key)**. HKDF-SHA256 derivation off `PAYLOAD_KEY` (a managed-server-only secret stored in Infisical).
+  - Used to wrap the DEK. The wrapped DEK lives in our database.
+  - Never transmitted, never persisted unwrapped.
+
+This is the standard envelope-encryption pattern. A breach of our database leaks wrapped DEKs that an attacker can't unwrap without `PAYLOAD_KEY`. A breach of `PAYLOAD_KEY` (e.g. our Infisical credentials) leaks the ability to unwrap DEKs but requires also exfiltrating the encrypted fragments from Azure Blob.
+
+## Layer 3: The decrypt proxy
+
+The reviewer's browser doesn't decrypt anything. It can't. The wrapped DEK is in our database, not in the dashboard. Instead, the dashboard renders `<img src="...">` with a URL that points at the managed decrypt proxy:
+
+```
+https://api.awaithumans.dev/api/v1/awaitverify/tasks/{task_id}/fragments/{i}/view?token={hmac_signed}
+```
+
+The proxy:
+
+1. Verifies the HMAC token (bound to `task_id` + `fragment_index` + `expires_at`).
+2. Looks up the wrapped DEK from the upload session.
+3. Unwraps it with the KEK.
+4. Fetches the encrypted blob from Azure Storage.
+5. Decrypts in memory.
+6. Streams plaintext PNG bytes to the reviewer's browser with `Cache-Control: private` and `X-Content-Type-Options: nosniff`.
+
+The wrapped DEK never leaves the managed process; the plaintext DEK exists only in the duration of one decrypt call.
+
+Token failures (signature, expiry, path mismatch) all collapse to HTTP 403 with no body so an attacker can't tell which check failed.
+
+## Layer 4: Post-submit redaction
+
+When the reviewer hits Submit:
+
+1. **Wrapped DEK destruction.** Managed nulls `upload_sessions.wrapped_dek`. After this, fragments stored against this task are **cryptographically unrecoverable** even with full filesystem access to our database and storage.
+2. **Fragment blob deletion.** Managed deletes each encrypted fragment from Azure Blob. The ciphertext bytes are gone from storage entirely.
+3. **OSS-side response redaction.** OSS dispatches the callback to managed; on 2xx, OSS nulls its own copy of `response_json` and stamps `response_redacted_at`. The dashboard's submitted-response view renders a "delivered, content redacted" panel from that point onward.
+4. **Managed-side claim-and-null.** The SDK's poll endpoint returns the response in the same SQL transaction that nulls `verification_tasks.response_json`. Subsequent polls see the completed-but-empty state.
+
+Net effect: after `verify_document()` returns, the response content lives only inside your Python process. Our audit trail keeps timestamps, customer/task IDs, reviewer attribution, and billing. Nothing about the response **content**.
+
+## What we retain
+
+For each task, we keep indefinitely:
+
+- Task ID, customer ID, task description (the prompt you sent, not the document)
+- Status transitions (created → awaiting_review → completed) with timestamps
+- Reviewer attribution (which operator submitted), method (dashboard / Slack), submission time
+- Billing entries (amount, source, balance after)
+- Failed-task error logs (which exception triggered, no response content)
+
+We do **not** keep, after the round-trip:
+
+- The document plaintext
+- The response content
+- The wrapped DEK
+- The encrypted fragments in Azure
+
+## In transit
+
+- TLS 1.2+ on every API call. SDK to managed, managed to OSS, OSS to reviewer browser, reviewer to OSS.
+- HMAC signing on:
+  - OSS → managed webhook callbacks (`X-Awaithumans-Signature`)
+  - Managed → reviewer decrypt-proxy URLs (token in URL)
+- The SDK validates the managed-server certificate as part of the standard `httpx` TLS handshake.
+
+## Operator and credential management
+
+- All managed-service runtime secrets (DB URL, OSS admin token, payload key, Stripe webhook secret, Slack tokens) are fetched from Infisical on container boot. Nothing is baked into the image.
+- Postgres uses managed-identity credentials with a rotated password. Reviewer service shares the same Postgres server but a separate database (`awaithumans_reviewers` vs `awaithumans_managed`).
+- GitHub Actions has bootstrap credentials only (Azure login + Infisical client ID/secret). No application-level secrets in repo settings.
+
+## Compliance posture
+
+- **Delaware C-corp**. Governing law for the customer contract.
+- **Audit log retention**: indefinite for task metadata, until reviewer submit for response content (which then gets destroyed per the above).
+- **BAA / SCC / per-account audit-log retention** beyond what's described above: enterprise tier. Email `compliance@awaithumans.dev`.
+
+## How to verify all this
+
+1. **The SDK fragmentation code is in your install.** `pip show -f awaithumans` lists `awaithumans/awaitverify/fragmentation.py` and `awaithumans/awaitverify/_encryption.py`. Read them. The plaintext DEK is generated in your process, the encryption happens in your process, only ciphertext is uploaded.
+2. **The proxy is the only path to plaintext fragments.** Try fetching one of our Azure Blob URLs directly with a browser. You'll see ciphertext bytes, not an image.
+3. **Post-submit, the proxy returns 404.** After a task completes, hit the same proxy URL with a valid token. You get 404 (the wrapped DEK is destroyed, the blob is gone).
+
+## What's intentionally out of scope (v1)
+
+- **Multi-tenant operator separation.** All our reviewers see all tasks. Per-customer reviewer pools land post-launch.
+- **Customer-side encryption of the response.** Today the response is plaintext over TLS to your SDK. End-to-end response encryption (you pass a public key, the reviewer's submission encrypts to it) is on the roadmap.
+- **Air-gapped on-prem reviewer.** Enterprise customers can run their own reviewer dashboard (the OSS `awaithumans` server is the same code) but Phase 1 ships only the managed reviewer pool.
+
+## Where to go next
+
+<CardGroup cols={2}>
+  <Card title="Errors" icon="circle-exclamation" href="/awaitverify/errors">
+    What goes wrong, how to debug it without leaking content into logs.
+  </Card>
+  <Card title="Pricing" icon="credit-card" href="/awaitverify/pricing">
+    What we retain about your billing vs. what we don't.
+  </Card>
+</CardGroup>
