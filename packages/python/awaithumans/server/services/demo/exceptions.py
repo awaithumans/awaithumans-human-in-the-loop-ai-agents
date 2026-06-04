@@ -23,9 +23,7 @@ class InvalidDemoEmailError(DemoError):
     docs_path = "demo-work-email-required"
 
     def __init__(self) -> None:
-        super().__init__(
-            "Use your work email — Gmail and other personal addresses aren't accepted."
-        )
+        super().__init__("Use your work email. Gmail and other personal addresses aren't accepted.")
 
 
 class DemoPerEmailCapError(DemoError):
@@ -36,7 +34,7 @@ class DemoPerEmailCapError(DemoError):
     def __init__(self) -> None:
         super().__init__(
             "You've already tried the demo this week. "
-            "Sign up for the real thing — $5 free credit applied automatically."
+            "Sign up for the real thing, $5 free credit applied automatically."
         )
 
 
@@ -50,7 +48,7 @@ class DemoCapacityError(DemoError):
 
     def __init__(self) -> None:
         super().__init__(
-            "Demo's at capacity right now. Sign up to skip the line — $5 free credit on signup."
+            "Demo's at capacity right now. Sign up to skip the line, $5 free credit on signup."
         )
 
 
