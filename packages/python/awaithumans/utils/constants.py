@@ -363,3 +363,59 @@ AWAITVERIFY_LIBREOFFICE_DEFAULT_BIN = "libreoffice"
 # Max wall time for the LibreOffice conversion subprocess. Office
 # files of typical size convert in 1-5s; 60s gives generous headroom.
 AWAITVERIFY_LIBREOFFICE_TIMEOUT_SECONDS = 60
+
+# ─── Demo (AwaitVerify landing demo) ─────────────────────────────────────
+
+DEMO_FREE_EMAIL_DOMAINS = frozenset(
+    {
+        "gmail.com",
+        "googlemail.com",
+        "yahoo.com",
+        "yahoo.co.uk",
+        "outlook.com",
+        "hotmail.com",
+        "hotmail.co.uk",
+        "live.com",
+        "msn.com",
+        "icloud.com",
+        "me.com",
+        "mac.com",
+        "aol.com",
+        "proton.me",
+        "protonmail.com",
+        "pm.me",
+        "yandex.com",
+        "gmx.com",
+        "gmx.de",
+        "mail.com",
+        "zoho.com",
+        "fastmail.com",
+        "tutanota.com",
+    }
+)
+
+DEMO_DISPOSABLE_EMAIL_DOMAINS = frozenset(
+    {
+        "mailinator.com",
+        "tempmail.com",
+        "10minutemail.com",
+        "guerrillamail.com",
+        "throwawaymail.com",
+        "yopmail.com",
+        "trashmail.com",
+        "sharklasers.com",
+        "getairmail.com",
+        "maildrop.cc",
+        "dispostable.com",
+        "fakemail.net",
+    }
+)
+
+DEMO_MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024  # 10 MB
+DEMO_DEFAULT_DAILY_CAP = 50
+DEMO_DEFAULT_PER_IP_CAP = 3
+DEMO_DEFAULT_PER_IP_WINDOW_HOURS = 24
+DEMO_DEFAULT_PER_EMAIL_WINDOW_DAYS = 7
+DEMO_DEFAULT_DAILY_COST_CEILING_CENTS = 500  # $5/day
+DEMO_DEFAULT_FALLBACK_AFTER_HOURS = 72
+DEMO_MAX_LLM_TOKENS = 2000
