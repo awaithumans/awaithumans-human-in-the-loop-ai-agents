@@ -40,3 +40,23 @@ def test_allowlist_override() -> None:
 def test_case_insensitive_domain() -> None:
     with pytest.raises(InvalidDemoEmailError):
         validate_demo_email("Alice@Gmail.COM", allowlist_extra=frozenset())
+
+
+def test_rejects_trailing_newline_on_free_domain() -> None:
+    # Regression: `re.match` with `$` would let a trailing newline bypass
+    # the deny list because `$` matches before `\n`. The gate now strips
+    # and uses `\Z`, so this MUST still raise.
+    with pytest.raises(InvalidDemoEmailError):
+        validate_demo_email("alice@gmail.com\n", allowlist_extra=frozenset())
+
+
+def test_accepts_surrounding_whitespace() -> None:
+    # Paste-friendly: leading/trailing whitespace is stripped before the
+    # check so a pasted address with a stray space is not falsely
+    # rejected as malformed.
+    validate_demo_email("  alice@acme.com  ", allowlist_extra=frozenset())
+
+
+def test_rejects_inner_whitespace() -> None:
+    with pytest.raises(InvalidDemoEmailError):
+        validate_demo_email("alice @acme.com", allowlist_extra=frozenset())

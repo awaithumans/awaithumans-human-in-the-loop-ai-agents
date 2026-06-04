@@ -16,16 +16,21 @@ from awaithumans.utils.constants import (
     DEMO_FREE_EMAIL_DOMAINS,
 )
 
-_EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+# `\Z` anchors at end-of-string (unlike `$`, which matches before a
+# trailing newline). `re.fullmatch` also requires start-of-string. The
+# combo closes the `"gmail.com\n"` deny-list bypass that `^...$` allows.
+_EMAIL_RE = re.compile(r"[^@\s]+@[^@\s]+\.[^@\s]+\Z")
 
 
 def validate_demo_email(email: str, *, allowlist_extra: frozenset[str]) -> None:
     """Raise InvalidDemoEmailError unless `email` is a syntactically
-    valid address on a non-free, non-disposable domain (or on a
-    domain explicitly allowlisted)."""
-    if not _EMAIL_RE.match(email):
+    valid address on a non-free, non-disposable domain (or on a domain
+    explicitly allowlisted). Surrounding whitespace is tolerated so a
+    pasted address doesn't fail on a stray space or newline."""
+    cleaned = email.strip()
+    if not _EMAIL_RE.fullmatch(cleaned):
         raise InvalidDemoEmailError()
-    domain = email.rsplit("@", 1)[1].lower()
+    domain = cleaned.rsplit("@", 1)[1].lower()
     if domain in allowlist_extra:
         return
     if domain in DEMO_FREE_EMAIL_DOMAINS or domain in DEMO_DISPOSABLE_EMAIL_DOMAINS:
