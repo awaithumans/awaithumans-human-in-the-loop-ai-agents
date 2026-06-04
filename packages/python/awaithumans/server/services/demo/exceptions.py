@@ -14,6 +14,7 @@ from awaithumans.server.services.exceptions import ServiceError
 class DemoError(ServiceError):
     """Base for demo errors."""
 
+    error_code = "DEMO_ERROR"
     docs_path = "demo"
 
 
@@ -44,7 +45,7 @@ class DemoCapacityError(DemoError):
 
     status_code = 429
     error_code = "DEMO_CAPACITY"
-    docs_path = "demo-rate-limit"
+    docs_path = "demo-capacity"
 
     def __init__(self) -> None:
         super().__init__(
