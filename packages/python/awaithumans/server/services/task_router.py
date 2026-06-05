@@ -80,6 +80,29 @@ async def resolve_assign_to(
     if not assign_to:
         return RoutingResult(user_id=None, email=None)
 
+    # Demo lane (public + hot): both AwaitVerify landing-demo priorities
+    # route to a single dedicated reviewer via DEMO_REVIEWER_EMAIL. The
+    # hot-lane Slack-channel ping is layered on top later in the
+    # notification pipeline; routing-wise they share an inbox so the
+    # founder sees every demo in one place. If the env var is unset we
+    # fall through to normal AwaitVerify resolution rather than silently
+    # dropping the task; an operator running the demo without the var
+    # set is misconfigured but the task still needs an owner.
+    if assign_to.get("managed") == "awaitverify" and assign_to.get("priority") in {
+        "demo",
+        "demo_hot",
+    }:
+        from awaithumans.server.core.config import settings
+
+        if settings.DEMO_REVIEWER_EMAIL:
+            user = await _get_by_email(session, settings.DEMO_REVIEWER_EMAIL)
+            if user is not None:
+                return _result_from_user(user)
+            return RoutingResult(
+                user_id=None,
+                email=settings.DEMO_REVIEWER_EMAIL,
+            )
+
     # Explicit-email path: developer handed us the address directly.
     explicit_email = assign_to.get("email")
     if explicit_email:

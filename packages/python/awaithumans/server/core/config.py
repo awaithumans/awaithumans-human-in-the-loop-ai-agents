@@ -154,6 +154,22 @@ class Settings(BaseSettings):
     EMBED_PARENT_ORIGINS: str = ""
     SERVICE_API_KEY: str | None = None
 
+    # ─── Demo (AwaitVerify landing demo) ─────────────────────────────
+    TURNSTILE_SECRET: str | None = None
+    DEMO_REVIEWER_EMAIL: str | None = None
+    DEMO_HOT_SLACK_CHANNEL_ID: str | None = None
+    DEMO_BOOKING_URL: str = "https://cal.com/awaithumans/15min"
+    DEMO_PROVIDER: str = "openai-gpt-5"
+    DEMO_CONFIDENCE_THRESHOLD: float = 0.85
+    DEMO_CLAIM_TIMEOUT_SECONDS: int = 300  # public lane only; hot lane never times out
+    DEMO_DAILY_CAP: int = 50
+    DEMO_PER_IP_CAP: int = 3
+    DEMO_PER_IP_WINDOW_HOURS: int = 24
+    DEMO_PER_EMAIL_WINDOW_DAYS: int = 7
+    DEMO_DAILY_COST_CEILING_CENTS: int = 500
+    DEMO_FALLBACK_AFTER_HOURS: int = 72
+    DEMO_EMAIL_ALLOWLIST_EXTRA: str = ""  # comma-separated extra domains
+
     model_config = {
         "env_prefix": "AWAITHUMANS_",
         "env_file": ".env",
