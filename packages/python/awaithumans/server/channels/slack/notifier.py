@@ -19,6 +19,7 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, Any
 
+from awaithumans.awaitverify.types import Priority
 from awaithumans.forms import FormDefinition, unsupported_fields
 from awaithumans.server.channels.routing import ChannelRoute, routes_for_channel
 from awaithumans.server.channels.slack.blocks import open_review_message_blocks
@@ -66,7 +67,6 @@ async def notify_task(
 
     form = _parse_form(form_definition)
     offenders = unsupported_fields(form, "slack") if form is not None else None
-    fallback_text = f"New task: {task_title}"
 
     factory = get_async_session_factory()
     async with factory() as session:
@@ -79,6 +79,15 @@ async def notify_task(
         except Exception as exc:  # noqa: BLE001
             logger.warning("notify_task: task %s missing: %s", task_id, exc)
             return
+
+        # AwaitVerify demo tasks get a visible tag so reviewers can spot
+        # them in their queue at a glance. `demo` is the public landing
+        # lane, `demo_hot` is the warm-prospect hot lane (founder pings).
+        # The hot-lane CHANNEL routing (separate Slack channel id) is a
+        # separate concern; this is just the message-text marker.
+        prefix = _demo_prefix(task.assign_to)
+        prefixed_title = f"{prefix}{task_title}"
+        fallback_text = f"New task: {prefixed_title}"
 
         # Sign the URL for the resolved assignee when we have one.
         # Slack-only users (no email/password) have no other way through
@@ -106,7 +115,7 @@ async def notify_task(
 
             blocks = open_review_message_blocks(
                 task_id=task_id,
-                task_title=task_title,
+                task_title=prefixed_title,
                 review_url=review_url,
                 open_button_action_id=SLACK_ACTION_OPEN_REVIEW,
                 unsupported_fields=offenders if offenders else None,
@@ -208,6 +217,24 @@ async def notify_task(
                 )
 
         await session.commit()
+
+
+def _demo_prefix(assign_to: dict[str, Any] | None) -> str:
+    """Return a `[DEMO] ` / `[DEMO·HOT] ` prefix for AwaitVerify demo tasks.
+
+    Returns an empty string for any task that is not an AwaitVerify demo,
+    so non-demo callers are completely unaffected. The middle-dot (·,
+    U+00B7) in `[DEMO·HOT]` is intentional — visually distinct from
+    `[DEMO]` at a glance and Unicode-safe in Slack.
+    """
+    if not assign_to or assign_to.get("managed") != "awaitverify":
+        return ""
+    priority = assign_to.get("priority")
+    if priority == Priority.DEMO_HOT.value:
+        return "[DEMO·HOT] "
+    if priority == Priority.DEMO.value:
+        return "[DEMO] "
+    return ""
 
 
 def _is_channel_target(target: str) -> bool:
