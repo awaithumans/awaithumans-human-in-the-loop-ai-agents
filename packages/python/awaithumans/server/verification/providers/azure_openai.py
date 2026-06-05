@@ -1,8 +1,10 @@
 """Azure OpenAI verifier.
 
-Same wire format as the OpenAI provider — Azure OpenAI is API-compatible
-with OpenAI's chat completions, just with a different base URL +
-deployment-name addressing.
+Uses the Responses API (`client.responses.create`) with a JSON-schema
+text.format. Required for GPT-5.x Azure deployments, which reject the
+older chat.completions + response_format path: 'Unsupported parameter:
+response_format. In the Responses API, this parameter has moved to
+text.format.'
 
 Reads three things from VerifierConfig.metadata:
   - endpoint_env  (default: AZURE_OPENAI_ENDPOINT) — full base URL
@@ -72,29 +74,31 @@ async def verify(config: VerifierConfig, ctx: VerificationContext) -> VerifierRe
         api_version=api_version,
     )
 
+    # See providers/openai.py for the strict=False rationale: the
+    # widened `parsed_response.type` union can't satisfy Responses-API
+    # nested-strict rules. Wire shape is still enforced by
+    # VERIFIER_OUTPUT_SCHEMA and `_to_result`.
     strict_schema = to_openai_strict_schema(VERIFIER_OUTPUT_SCHEMA)
 
     try:
-        response = await client.chat.completions.create(
+        response = await client.responses.create(
             model=deployment,  # for Azure, "model" is the deployment name
-            messages=[
-                {"role": "system", "content": build_system_prompt(config.instructions)},
-                {"role": "user", "content": build_user_prompt(ctx)},
-            ],
-            response_format={
-                "type": "json_schema",
-                "json_schema": {
+            instructions=build_system_prompt(config.instructions),
+            input=build_user_prompt(ctx),
+            text={
+                "format": {
+                    "type": "json_schema",
                     "name": VERIFIER_OUTPUT_SCHEMA_NAME,
                     "schema": strict_schema,
-                    "strict": True,
-                },
+                    "strict": False,
+                }
             },
-            max_tokens=VERIFIER_MAX_OUTPUT_TOKENS,
+            max_output_tokens=VERIFIER_MAX_OUTPUT_TOKENS,
         )
     except Exception as exc:  # noqa: BLE001
         raise VerifierProviderError("azure", sanitize_provider_error_detail(str(exc))) from exc
 
-    content = response.choices[0].message.content
+    content = response.output_text
     if not content:
         raise VerifierProviderError("azure", "Empty response content.")
 
