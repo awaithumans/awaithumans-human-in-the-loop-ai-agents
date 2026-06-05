@@ -20,7 +20,7 @@ packages = ["awaithumans"]
 
 [project]
 name = "awaithumans"
-version = "0.1.9"
+version = "0.1.10"
 description = "HITL infrastructure for AI agents. Your agent calls await_human(), a human reviews via Slack/email/dashboard, agent resumes with a typed response."
 readme = "README.md"
 license = "Apache-2.0"
