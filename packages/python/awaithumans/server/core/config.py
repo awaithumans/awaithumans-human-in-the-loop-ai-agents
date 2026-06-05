@@ -97,6 +97,16 @@ class Settings(BaseSettings):
     # ── Verification ─────────────────────────────────────────────────
     ANTHROPIC_API_KEY: str | None = None
 
+    # ── Azure OpenAI (demo extractor) ────────────────────────────────
+    # The AwaitVerify landing demo extractor calls Azure OpenAI rather
+    # than Anthropic so the founder can route demo spend through their
+    # Azure deployment quota. The deployment name is what the OpenAI
+    # SDK calls the `model` parameter when talking to Azure.
+    AZURE_OPENAI_ENDPOINT: str | None = None
+    AZURE_OPENAI_DEPLOYMENT: str | None = None
+    AZURE_OPENAI_API_KEY: str | None = None
+    AZURE_OPENAI_API_VERSION: str = "2024-10-21"
+
     def get_secret(self, env_name: str) -> str | None:
         """Read a secret value through Settings rather than raw os.environ.
 

@@ -18,14 +18,21 @@ class _Receipt(BaseModel):
     total_cents: int
 
 
-def _mock_message(text: str, input_tokens: int = 500, output_tokens: int = 60) -> Any:
-    """Build an object shaped like anthropic.types.Message that the
-    extractor consumes."""
+def _mock_chat_completion(text: str) -> Any:
+    """Build an object shaped like `openai.types.chat.ChatCompletion`.
+
+    The extractor only reads `response.choices[0].message.content`, so a
+    nested SimpleNamespace is enough to stand in for the real SDK
+    response without pulling in the full pydantic models.
+    """
     from types import SimpleNamespace
 
     return SimpleNamespace(
-        content=[SimpleNamespace(text=text, type="text")],
-        usage=SimpleNamespace(input_tokens=input_tokens, output_tokens=output_tokens),
+        choices=[
+            SimpleNamespace(
+                message=SimpleNamespace(content=text),
+            )
+        ],
     )
 
 
@@ -37,7 +44,9 @@ async def test_happy_path() -> None:
     )
     with patch("awaithumans.server.services.demo.extractor._build_client") as mock_client_builder:
         client = AsyncMock()
-        client.messages.create = AsyncMock(return_value=_mock_message(response_text))
+        client.chat.completions.create = AsyncMock(
+            return_value=_mock_chat_completion(response_text)
+        )
         mock_client_builder.return_value = client
 
         result = await run_demo_extraction(
@@ -54,7 +63,7 @@ async def test_happy_path() -> None:
 async def test_raises_on_invalid_json() -> None:
     with patch("awaithumans.server.services.demo.extractor._build_client") as mock_client_builder:
         client = AsyncMock()
-        client.messages.create = AsyncMock(return_value=_mock_message("not json"))
+        client.chat.completions.create = AsyncMock(return_value=_mock_chat_completion("not json"))
         mock_client_builder.return_value = client
 
         with pytest.raises(DemoProviderError):
@@ -68,8 +77,8 @@ async def test_raises_on_invalid_json() -> None:
 async def test_raises_on_missing_data_key() -> None:
     with patch("awaithumans.server.services.demo.extractor._build_client") as mock_client_builder:
         client = AsyncMock()
-        client.messages.create = AsyncMock(
-            return_value=_mock_message('{"confidence": {"vendor": 0.9}}')
+        client.chat.completions.create = AsyncMock(
+            return_value=_mock_chat_completion('{"confidence": {"vendor": 0.9}}')
         )
         mock_client_builder.return_value = client
 
@@ -88,7 +97,9 @@ async def test_raises_on_schema_mismatch() -> None:
     )  # missing total_cents required field
     with patch("awaithumans.server.services.demo.extractor._build_client") as mock_client_builder:
         client = AsyncMock()
-        client.messages.create = AsyncMock(return_value=_mock_message(response_text))
+        client.chat.completions.create = AsyncMock(
+            return_value=_mock_chat_completion(response_text)
+        )
         mock_client_builder.return_value = client
 
         with pytest.raises(DemoProviderError):
@@ -99,10 +110,10 @@ async def test_raises_on_schema_mismatch() -> None:
 
 
 @pytest.mark.asyncio
-async def test_raises_on_anthropic_error() -> None:
+async def test_raises_on_sdk_error() -> None:
     with patch("awaithumans.server.services.demo.extractor._build_client") as mock_client_builder:
         client = AsyncMock()
-        client.messages.create = AsyncMock(side_effect=RuntimeError("API down"))
+        client.chat.completions.create = AsyncMock(side_effect=RuntimeError("API down"))
         mock_client_builder.return_value = client
 
         with pytest.raises(DemoProviderError):
@@ -121,7 +132,9 @@ async def test_confidence_defaults_to_zero_when_missing_field() -> None:
     )
     with patch("awaithumans.server.services.demo.extractor._build_client") as mock_client_builder:
         client = AsyncMock()
-        client.messages.create = AsyncMock(return_value=_mock_message(response_text))
+        client.chat.completions.create = AsyncMock(
+            return_value=_mock_chat_completion(response_text)
+        )
         mock_client_builder.return_value = client
 
         result = await run_demo_extraction(

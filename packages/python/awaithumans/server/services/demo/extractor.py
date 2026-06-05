@@ -1,11 +1,14 @@
 """AI extractor with per-field confidence, the v2 demo hero step.
 
-Single call to Anthropic Claude (model name labeled to the visitor as
-"AI extractor (GPT-5.5)" but the actual provider is internal). Returns
-field values + per-field confidence + a flat cost estimate. The
+Single call to Azure OpenAI (deployment configured by the operator).
+Returns field values + per-field confidence + a flat cost estimate. The
 confidence map is what drives the hero moment: fields below
 DEMO_CONFIDENCE_THRESHOLD route to a human reviewer; high-confidence
 fields render immediately as confirmed.
+
+The visitor-facing label remains "AI extractor (GPT-5.5)" — the actual
+provider deployment is internal. Errors are sanitized through
+DemoProviderError so the wizard never leaks Azure-specific details.
 """
 
 from __future__ import annotations
@@ -22,14 +25,13 @@ from awaithumans.server.core.config import settings
 from awaithumans.server.services.demo.exceptions import DemoProviderError
 
 if TYPE_CHECKING:
-    from anthropic import AsyncAnthropic
+    from openai import AsyncAzureOpenAI
 
 logger = logging.getLogger("awaithumans.server.services.demo.extractor")
 
-_DEFAULT_MODEL = "claude-opus-4-7"
 _MAX_TOKENS = 2000
 _COST_PER_CALL_CENTS = 6
-_PROVIDER_LABEL = "AI extractor (GPT-5.5)"
+_PROVIDER_LABEL = "AI extractor (Azure OpenAI)"
 
 _SYSTEM_PROMPT = (
     "You are an expert document extraction system. Given an image of a "
@@ -50,17 +52,33 @@ class ExtractionResult:
     cost_cents: int
 
 
-def _build_client() -> AsyncAnthropic:
+def _build_client() -> AsyncAzureOpenAI:
+    """Construct an Azure OpenAI client from configured settings.
+
+    All three of endpoint + deployment + api_key must be set. Missing
+    any one of them surfaces as `DemoProviderError` so the wizard shows
+    a generic "extractor unavailable" message rather than a stack
+    trace. The deployment name is consumed downstream as the `model`
+    argument to chat.completions.create.
+    """
     try:
-        from anthropic import AsyncAnthropic  # noqa: PLC0415
+        from openai import AsyncAzureOpenAI  # noqa: PLC0415
     except ImportError as exc:
-        logger.warning("Anthropic SDK not installed: %s", exc)
+        logger.warning("OpenAI SDK not installed: %s", exc)
         raise DemoProviderError(_PROVIDER_LABEL) from exc
 
-    api_key = settings.ANTHROPIC_API_KEY
-    if not api_key:
+    if not (
+        settings.AZURE_OPENAI_API_KEY
+        and settings.AZURE_OPENAI_ENDPOINT
+        and settings.AZURE_OPENAI_DEPLOYMENT
+    ):
         raise DemoProviderError(_PROVIDER_LABEL)
-    return AsyncAnthropic(api_key=api_key)
+
+    return AsyncAzureOpenAI(
+        api_key=settings.AZURE_OPENAI_API_KEY,
+        azure_endpoint=settings.AZURE_OPENAI_ENDPOINT,
+        api_version=settings.AZURE_OPENAI_API_VERSION,
+    )
 
 
 def _build_user_prompt(response_model: type[BaseModel]) -> str:
@@ -89,20 +107,23 @@ async def run_demo_extraction(
     try:
         client = _build_client()
         image_b64 = base64.standard_b64encode(page_png).decode("ascii")
-        message = await client.messages.create(
-            model=_DEFAULT_MODEL,
+        # In Azure mode the OpenAI SDK accepts the DEPLOYMENT name as
+        # the `model` argument and dispatches to that deployment under
+        # the hood. `response_format={"type": "json_object"}` enables
+        # JSON mode so the model is forced to return parseable JSON.
+        response = await client.chat.completions.create(
+            model=settings.AZURE_OPENAI_DEPLOYMENT or "",
             max_tokens=_MAX_TOKENS,
-            system=_SYSTEM_PROMPT,
+            response_format={"type": "json_object"},
             messages=[
+                {"role": "system", "content": _SYSTEM_PROMPT},
                 {
                     "role": "user",
                     "content": [
                         {
-                            "type": "image",
-                            "source": {
-                                "type": "base64",
-                                "media_type": "image/png",
-                                "data": image_b64,
+                            "type": "image_url",
+                            "image_url": {
+                                "url": f"data:image/png;base64,{image_b64}",
                             },
                         },
                         {
@@ -110,7 +131,7 @@ async def run_demo_extraction(
                             "text": _build_user_prompt(response_model),
                         },
                     ],
-                }
+                },
             ],
         )
     except DemoProviderError:
@@ -119,7 +140,7 @@ async def run_demo_extraction(
         logger.warning("Demo extractor call failed: %s", exc)
         raise DemoProviderError(_PROVIDER_LABEL) from exc
 
-    raw_text = _extract_text(message)
+    raw_text = _extract_text(response)
     try:
         parsed = json.loads(raw_text)
     except (json.JSONDecodeError, ValueError) as exc:
@@ -156,13 +177,22 @@ async def run_demo_extraction(
     )
 
 
-def _extract_text(message: Any) -> str:
-    """Pull the first text block out of an Anthropic response."""
-    content = getattr(message, "content", None)
-    if not content:
+def _extract_text(response: Any) -> str:
+    """Pull the assistant text out of a ChatCompletion response.
+
+    Tolerates both the real OpenAI SDK shape (`response.choices[0]
+    .message.content`) and minimal SimpleNamespace test doubles. Returns
+    an empty string when the response is malformed; the JSON parse step
+    above will then surface a clean DemoProviderError to the caller.
+    """
+    choices = getattr(response, "choices", None)
+    if not choices:
         return ""
-    for block in content:
-        text = getattr(block, "text", None)
-        if isinstance(text, str) and text:
-            return text
+    first = choices[0]
+    message = getattr(first, "message", None)
+    if message is None:
+        return ""
+    content = getattr(message, "content", None)
+    if isinstance(content, str):
+        return content
     return ""

@@ -114,6 +114,12 @@ server = [
     # Embed-token sign/verify (HS256). PyPI package name is `pyjwt`;
     # import is `import jwt`. Used only in embed_token_service.py.
     "pyjwt>=2.8.0",
+    # AwaitVerify landing demo extractor talks to Azure OpenAI via the
+    # standard OpenAI SDK's `AsyncAzureOpenAI` client. The `[server]`
+    # extra already pulls in slack-sdk + resend, so adding one more
+    # provider SDK here keeps `pip install awaithumans[server]` as the
+    # single command to stand up the full demo stack.
+    "openai>=1.50.0",
 ]
 temporal = [
     "temporalio>=1.7.0",
