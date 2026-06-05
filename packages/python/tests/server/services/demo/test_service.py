@@ -14,7 +14,11 @@ from awaithumans.server.services.demo.exceptions import (
     TurnstileVerificationError,
 )
 from awaithumans.server.services.demo.extractor import ExtractionResult
-from awaithumans.server.services.demo.service import StartDemoInput, start_demo
+from awaithumans.server.services.demo.service import (
+    StartDemoInput,
+    start_demo,
+    submit_demo_field,
+)
 
 
 def _input(**overrides) -> StartDemoInput:
@@ -143,3 +147,111 @@ async def test_caps_block_second_call(db_session: AsyncSession) -> None:
         pytest.raises(DemoPerEmailCapError),
     ):
         await start_demo(db_session, input_=_input())
+
+
+# ─── Per-field submit ──────────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_submit_field_updates_correction(db_session: AsyncSession) -> None:
+    """First-of-many submission: status flips to partially_done and the
+    field lands in field_corrections."""
+    record = DemoRecord(
+        email="alice@acme.com",
+        email_domain="acme.com",
+        ip_hash="ip-1",
+        preset_key="Receipt",
+        ai_result={"vendor": "Acme", "total_cents": 1299, "date": "2026-01-01"},
+        field_confidences={"vendor": 0.97, "total_cents": 0.62, "date": 0.7},
+        pending_field_names=["total_cents", "date"],
+        status=DemoStatus.AWAITING_CLAIM,
+        awaitverify_task_id=None,  # link not required for this test
+    )
+    db_session.add(record)
+    await db_session.commit()
+
+    result = await submit_demo_field(
+        db_session,
+        demo_id=record.id,
+        field_name="total_cents",
+        value=1234,
+        reviewer_email=None,  # skip authz check by passing None
+    )
+
+    assert result.pending_field_names == ["date"]
+    assert result.field_corrections == {"total_cents": 1234}
+    assert result.status == DemoStatus.PARTIALLY_DONE
+
+
+@pytest.mark.asyncio
+async def test_submit_unknown_field_raises(db_session: AsyncSession) -> None:
+    """Anti-typo / anti-replay: a field name not in pending raises
+    DemoSchemaError, which the route maps to 400."""
+    record = DemoRecord(
+        email="alice@acme.com",
+        email_domain="acme.com",
+        ip_hash="ip-1",
+        preset_key="Receipt",
+        ai_result={"vendor": "Acme"},
+        field_confidences={"vendor": 0.97},
+        pending_field_names=["vendor"],
+        status=DemoStatus.AWAITING_CLAIM,
+    )
+    db_session.add(record)
+    await db_session.commit()
+
+    with pytest.raises(DemoSchemaError):
+        await submit_demo_field(
+            db_session,
+            demo_id=record.id,
+            field_name="not_a_field",
+            value="x",
+            reviewer_email=None,
+        )
+
+
+@pytest.mark.asyncio
+async def test_submit_completes_when_last_field(db_session: AsyncSession) -> None:
+    """Final field submission: status flips to review_complete, the
+    receipt email is fired out-of-band."""
+    record = DemoRecord(
+        email="alice@acme.com",
+        email_domain="acme.com",
+        ip_hash="ip-1",
+        preset_key="Receipt",
+        ai_result={"vendor": "Acme", "total_cents": 1299},
+        field_confidences={"vendor": 0.97, "total_cents": 0.62},
+        pending_field_names=["total_cents"],
+        status=DemoStatus.CLAIMED,
+        field_corrections={},
+    )
+    db_session.add(record)
+    await db_session.commit()
+
+    # The email send is scheduled via asyncio.create_task; patching the
+    # send fn itself is enough to assert it was invoked. We await the
+    # spawned task at the end so the test event loop doesn't drop it
+    # as "unawaited" noise.
+    async def _noop(record):  # type: ignore[no-untyped-def]
+        return None
+
+    with patch(
+        "awaithumans.server.services.demo.service.send_demo_review_complete_email",
+        side_effect=_noop,
+    ) as mock_send:
+        result = await submit_demo_field(
+            db_session,
+            demo_id=record.id,
+            field_name="total_cents",
+            value=1234,
+            reviewer_email=None,
+        )
+        # Give the create_task'd coroutine a tick to run so the mock
+        # records the call before the test asserts on it.
+        import asyncio
+
+        await asyncio.sleep(0)
+
+    assert result.pending_field_names == []
+    assert result.status == DemoStatus.REVIEW_COMPLETE
+    mock_send.assert_called_once()

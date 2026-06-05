@@ -13,6 +13,7 @@ the standard AwaitVerify pipeline using ``priority=demo`` (or
 
 from __future__ import annotations
 
+import asyncio
 import base64
 import logging
 from collections.abc import Awaitable, Callable
@@ -21,10 +22,16 @@ from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from awaithumans.server.channels.email.demo_email import (
+    send_demo_review_complete_email,
+)
 from awaithumans.server.core.config import settings
 from awaithumans.server.db.models import DemoRecord, DemoStatus
 from awaithumans.server.services.demo.email_gate import validate_demo_email
-from awaithumans.server.services.demo.exceptions import DemoSchemaError
+from awaithumans.server.services.demo.exceptions import (
+    DemoRecordNotFoundError,
+    DemoSchemaError,
+)
 from awaithumans.server.services.demo.extractor import (
     ExtractionResult,
     run_demo_extraction,
@@ -143,6 +150,140 @@ def _allowlist_from_settings() -> frozenset[str]:
     if not raw:
         return frozenset()
     return frozenset(domain.strip().lower() for domain in raw.split(",") if domain.strip())
+
+
+# ─── Per-field reviewer submit ──────────────────────────────────────────
+
+
+@dataclass
+class SubmitFieldResult:
+    """Return shape from ``submit_demo_field``.
+
+    The route layer flattens this into the public JSON response. Status
+    is the new ``DemoStatus`` after this submission; ``pending_field_names``
+    is what's still outstanding (empty when the last field just landed).
+    """
+
+    demo_id: str
+    status: DemoStatus
+    pending_field_names: list[str]
+    field_corrections: dict[str, Any]
+
+
+async def submit_demo_field(
+    session: AsyncSession,
+    *,
+    demo_id: str,
+    field_name: str,
+    value: Any,
+    reviewer_email: str | None,
+) -> SubmitFieldResult:
+    """Apply a single reviewer correction to a demo record.
+
+    Drives the v2 hero moment: each field the reviewer submits gets
+    pushed back to the visitor's browser via the polling endpoint, and
+    when the last pending field lands the receipt email fires.
+
+    ``reviewer_email`` is None when called from service-level tests
+    (the route layer always passes the authenticated reviewer). When
+    set AND the demo has a linked AwaitVerify task, we confirm the
+    submitter is the assigned reviewer; mismatches surface as
+    ``DemoSchemaError`` so the route returns 4xx without leaking which
+    field belongs to which reviewer.
+
+    The receipt email is fired with ``asyncio.create_task`` so the
+    final submission still returns immediately. The visitor sees the
+    last corrected field render in their browser without waiting for
+    SMTP. The completion of the linked AwaitVerify task happens
+    in-line because the agent that owns the task needs the terminal
+    transition committed before the route returns.
+    """
+    record = await session.get(DemoRecord, demo_id)
+    if record is None:
+        raise DemoRecordNotFoundError(demo_id)
+
+    if field_name not in record.pending_field_names:
+        raise DemoSchemaError(f"Field {field_name!r} is not pending for demo {demo_id}.")
+
+    # Authorisation: confirm the signed-in reviewer is the assignee on
+    # the linked AwaitVerify task. Skip when reviewer_email is None
+    # (service-level tests that aren't exercising the auth layer).
+    if reviewer_email is not None and record.awaitverify_task_id is not None:
+        from awaithumans.server.db.models import Task
+
+        task = await session.get(Task, record.awaitverify_task_id)
+        if task is not None and task.assigned_to_email != reviewer_email:
+            raise DemoSchemaError("Not authorized to submit this field.")
+
+    new_corrections: dict[str, Any] = dict(record.field_corrections or {})
+    new_corrections[field_name] = value
+    record.field_corrections = new_corrections
+
+    new_pending = [n for n in record.pending_field_names if n != field_name]
+    record.pending_field_names = new_pending
+
+    if not new_pending:
+        record.status = DemoStatus.REVIEW_COMPLETE
+    else:
+        record.status = DemoStatus.PARTIALLY_DONE
+
+    session.add(record)
+    await session.commit()
+    await session.refresh(record)
+
+    # When the last flagged field lands, complete the linked
+    # AwaitVerify task and fire the receipt email out-of-band so the
+    # route returns immediately. The visitor's browser sees the final
+    # correction without waiting on SMTP or the verifier path.
+    if not new_pending:
+        if record.awaitverify_task_id is not None:
+            await _complete_linked_task(
+                session,
+                task_id=record.awaitverify_task_id,
+                response=new_corrections,
+                reviewer_email=reviewer_email,
+            )
+        asyncio.create_task(send_demo_review_complete_email(record))
+
+    return SubmitFieldResult(
+        demo_id=record.id,
+        status=record.status,
+        pending_field_names=new_pending,
+        field_corrections=new_corrections,
+    )
+
+
+async def _complete_linked_task(
+    session: AsyncSession,
+    *,
+    task_id: str,
+    response: dict[str, Any],
+    reviewer_email: str | None,
+) -> None:
+    """Mark the linked AwaitVerify task as completed.
+
+    Best-effort: a failure here is logged and swallowed so the visitor
+    still sees the final field correction in their browser. The
+    underlying reviewer corrections are already committed on the
+    ``DemoRecord`` so the audit trail isn't lost.
+    """
+    from awaithumans.server.services.exceptions import TaskAlreadyTerminalError
+    from awaithumans.server.services.task_service import complete_task
+
+    try:
+        await complete_task(
+            session,
+            task_id=task_id,
+            response=response,
+            completed_by_email=reviewer_email,
+            completed_via_channel="demo",
+        )
+    except TaskAlreadyTerminalError:
+        # The task was already completed via the standard dashboard
+        # path; the demo flow just caught up. Nothing to do.
+        logger.info("Linked AwaitVerify task %s already terminal", task_id)
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("Failed to complete linked AwaitVerify task %s: %s", task_id, exc)
 
 
 # ─── AwaitVerify task creation (background runner) ──────────────────────

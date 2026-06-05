@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import hashlib
 import logging
+from typing import Any
 
 from fastapi import (
     APIRouter,
@@ -27,8 +28,14 @@ from fastapi import (
     Request,
     UploadFile,
 )
+from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from awaithumans.server.core.auth import (
+    InvalidSessionError,
+    SessionClaims,
+    verify_session,
+)
 from awaithumans.server.db.connection import get_session
 from awaithumans.server.db.models import DemoRecord, Task
 from awaithumans.server.schemas.demo import DemoStatusResponse, StartDemoResponse
@@ -37,8 +44,13 @@ from awaithumans.server.services.demo.service import (
     StartDemoInput,
     _create_awaitverify_task,
     start_demo,
+    submit_demo_field,
 )
-from awaithumans.utils.constants import DEMO_MAX_FILE_SIZE_BYTES
+from awaithumans.server.services.user_service import get_user
+from awaithumans.utils.constants import (
+    DASHBOARD_SESSION_COOKIE_NAME,
+    DEMO_MAX_FILE_SIZE_BYTES,
+)
 from awaithumans.utils.time import to_utc_unix
 
 router = APIRouter(prefix="/demo", tags=["demo"])
@@ -146,3 +158,98 @@ def _hash_ip(request: Request) -> str:
     if not raw and request.client is not None:
         raw = request.client.host
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:32]
+
+
+# ─── Per-field submit ──────────────────────────────────────────────────
+
+
+class SubmitFieldBody(BaseModel):
+    """Request body for the per-field submit endpoint.
+
+    ``value`` is intentionally ``Any``: presets define the strict
+    per-field types, and Pydantic's JSON parser accepts any JSON
+    primitive (string, number, bool, null, array, object). Stricter
+    per-preset validation lives in the preset model and can be wired
+    in here in a follow-up if reviewer typos start landing as garbage."""
+
+    value: Any
+
+
+@router.post("/{demo_id}/field/{field_name}/submit")
+async def submit_demo_field_route(
+    demo_id: str,
+    field_name: str,
+    body: SubmitFieldBody,
+    request: Request,
+    session: AsyncSession = Depends(get_session),
+) -> dict[str, Any]:
+    """Apply one reviewer correction to a demo record.
+
+    The reviewer's browser hits this once per field; each call returns
+    the new ``status`` + remaining ``pending_field_names`` so the
+    dashboard can render its progress UI. When the last pending field
+    lands, the linked AwaitVerify task is completed and the receipt
+    email fires out-of-band.
+
+    Auth: the route is under the public ``/api/demo/`` prefix (so the
+    visitor's status polling endpoint stays cookie-less), so this
+    handler does its own session check rather than relying on the
+    dashboard auth middleware. Same allow-list as
+    ``/api/tasks/{id}/complete``: operators and admin-bearer callers.
+    """
+    reviewer_email = await _require_demo_reviewer(request, session)
+    result = await submit_demo_field(
+        session,
+        demo_id=demo_id,
+        field_name=field_name,
+        value=body.value,
+        reviewer_email=reviewer_email,
+    )
+    return {
+        "demo_id": result.demo_id,
+        "status": result.status.value,
+        "pending_field_names": result.pending_field_names,
+        "field_corrections": result.field_corrections,
+    }
+
+
+async def _require_demo_reviewer(
+    request: Request,
+    session: AsyncSession,
+) -> str | None:
+    """Resolve the reviewer's email from the session cookie or 401/403.
+
+    Mirrors the dashboard auth middleware for the per-field submit path
+    (which sits under the public ``/api/demo/`` prefix, so the
+    middleware doesn't run its cookie check). Admin-bearer callers
+    return ``None`` so the service skips the per-task assignee check,
+    matching the regular task complete route where the agent's
+    bearer token isn't a human identity.
+    """
+    # Admin-bearer escape hatch (parity with the rest of the API).
+    if getattr(request.state, "auth_admin_token", False):
+        return None
+
+    cookie = request.cookies.get(DASHBOARD_SESSION_COOKIE_NAME)
+    if not cookie:
+        raise HTTPException(
+            status_code=401,
+            detail="Authentication required.",
+        )
+
+    try:
+        claims: SessionClaims = verify_session(cookie)
+    except InvalidSessionError:
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid or expired session.",
+        ) from None
+
+    user = await get_user(session, claims.user_id)
+    if user is None or not user.active:
+        raise HTTPException(
+            status_code=401,
+            detail="Session user no longer active.",
+        )
+
+    return user.email

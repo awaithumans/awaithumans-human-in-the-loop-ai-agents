@@ -87,3 +87,22 @@ def test_status_route_returns_404(client: TestClient) -> None:
     the centralized service-exception handler."""
     response = client.get("/api/demo/does-not-exist/status")
     assert response.status_code == 404, response.text
+
+
+def test_submit_field_route_requires_auth(client: TestClient) -> None:
+    """Anonymous callers can't submit field corrections.
+
+    The route does its own session check because ``/api/demo/`` is in
+    the public-prefix allowlist (the visitor's wizard polls
+    ``/status`` without a cookie). Without a session cookie OR admin
+    bearer, the route must 401 before any DB read so we don't leak
+    which demo IDs exist.
+    """
+    response = client.post(
+        "/api/demo/does-not-exist/field/total/submit",
+        json={"value": 1234},
+    )
+    assert response.status_code in (401, 404), response.text
+    # We expect 401 in v2: auth runs before the 404 lookup so that
+    # demo IDs aren't enumerable. Anything else is a regression.
+    assert response.status_code == 401
