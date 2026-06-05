@@ -14,6 +14,43 @@ into a versioned release when tagged.
 
 ---
 
+## [0.1.9] — 2026-06-04
+
+Two P0 SDK fixes surfaced during a live customer demo. Both affect any
+customer using the Python SDK without environment overrides.
+
+### Fixed
+
+- **`managed_url` default points at the production custom domain.** The
+  Python SDK previously defaulted `managed_url` to the raw Azure
+  Container Apps hostname, which does not resolve from customer
+  machines. A clean `pip install awaithumans` with only
+  `AWAITHUMANS_API_KEY` set now succeeds end-to-end against
+  `https://api.awaithumans.dev` without any URL override. The first
+  call to `verify_document` also emits an INFO log line showing the
+  resolved `managed_url`, so future misconfigurations (typos, stale
+  staging URLs, forgotten overrides) surface in customer logs instead
+  of a DNS stack trace.
+- **Upload path tolerates slow uplinks.** The per-PUT timeout for
+  uploading encrypted fragments to Azure Blob signed URLs is now 300s
+  (was 30s). On a normal residential uplink, a multi-page document
+  opens 20-30 parallel TLS PUTs and individual writes can legitimately
+  stall past 30s under saturation. Concurrency is now bounded at 8
+  (`AWAITVERIFY_UPLOAD_CONCURRENCY`) so a many-fragment document never
+  melts the customer's uplink. The new
+  `upload_timeout_seconds: int | None = None` kwarg on
+  `verify_document` lets customers on flaky networks tune the per-PUT
+  timeout without monkey-patching.
+
+### Added
+
+- `AWAITVERIFY_UPLOAD_TIMEOUT_SECONDS` and
+  `AWAITVERIFY_UPLOAD_CONCURRENCY` in `awaithumans.utils.constants`.
+  The two upload tuning knobs are now named constants rather than
+  magic numbers.
+
+---
+
 ## [0.1.8] — 2026-06-02
 
 AwaitVerify launch release. The first version that ships every layer of the paid managed product end-to-end: client-side encrypted document fragmentation, managed decrypt proxy, nested-Pydantic form rendering, per-page review carousel, pre-filled responses, immediate post-submit redaction, and a complete Mintlify docs section. Smoke test green from `verify_document()` → reviewer dashboard → typed Pydantic result back into the customer's process, with the response content destroyed everywhere except inside that process after the round-trip.

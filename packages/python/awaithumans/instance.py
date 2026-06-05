@@ -83,13 +83,11 @@ class AwaitHumans:
         self.server_url = server_url or os.environ.get("AWAITHUMANS_SERVER_URL")
         # Production managed endpoint. Customers can override per
         # instance via `managed_url=` or per process via the
-        # AWAITHUMANS_MANAGED_URL env var. When we later cut over a
-        # custom domain (`api.awaithumans.dev`), update this default
-        # in one place and ship a minor release.
+        # AWAITHUMANS_MANAGED_URL env var.
         self.managed_url = (
             managed_url
             or os.environ.get("AWAITHUMANS_MANAGED_URL")
-            or "https://awaithumans-managed.icyflower-6900d175.westus3.azurecontainerapps.io"
+            or "https://api.awaithumans.dev"
         )
         self.openai = openai
         self.anthropic = anthropic
@@ -154,12 +152,14 @@ class AwaitHumans:
         timeout_seconds: int | None = None,
         idempotency_key: str | None = None,
         task_metadata: dict[str, str] | None = None,
+        upload_timeout_seconds: int | None = None,
     ) -> Any:
         """Verify a document via AwaitVerify managed reviewers.
 
         See the module-level `verify_document` for the full argument
         reference, including `task_metadata` for surfacing free-form
-        context to the reviewer.
+        context to the reviewer and `upload_timeout_seconds` for
+        per-PUT upload tuning on flaky networks.
         """
         from awaithumans.awaitverify.client import (  # noqa: PLC0415
             verify_document as _verify,
@@ -178,6 +178,7 @@ class AwaitHumans:
             timeout_seconds=timeout_seconds,
             idempotency_key=idempotency_key,
             task_metadata=task_metadata,
+            upload_timeout_seconds=upload_timeout_seconds,
         )
 
     def verify_document_sync(self, **kwargs: Any) -> Any:

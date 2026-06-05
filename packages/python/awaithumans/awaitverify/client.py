@@ -61,6 +61,8 @@ from awaithumans.utils.constants import (
     AWAITVERIFY_DEFAULT_TIMEOUT_SECONDS,
     AWAITVERIFY_FRAGMENT_COUNT,
     AWAITVERIFY_MIN_TIMEOUT_SECONDS,
+    AWAITVERIFY_UPLOAD_CONCURRENCY,
+    AWAITVERIFY_UPLOAD_TIMEOUT_SECONDS,
     MAX_TIMEOUT_SECONDS,
 )
 
@@ -147,6 +149,7 @@ async def verify_document(
     timeout_seconds: int | None = None,
     idempotency_key: str | None = None,
     task_metadata: dict[str, str] | None = None,
+    upload_timeout_seconds: int | None = None,
 ) -> T:
     """Verify a document via AwaitVerify managed reviewers.
 
@@ -182,6 +185,11 @@ async def verify_document(
             Helpful when the reviewer needs domain context to make a
             judgment call. Keys/values are strings; nested structures
             are rejected by the managed backend.
+        upload_timeout_seconds: Per-PUT timeout for uploading each
+            encrypted fragment to its signed Azure Blob URL. Defaults
+            to ``AWAITVERIFY_UPLOAD_TIMEOUT_SECONDS`` (300s). Raise
+            this on slow or flaky uplinks; lower it to fail fast in
+            tests.
     """
     if client is None:
         from awaithumans.instance import get_default_client  # noqa: PLC0415
@@ -190,6 +198,18 @@ async def verify_document(
 
     resolved_timeout = _resolve_timeout(timeout_seconds)
     resolved_priority = _resolve_priority(priority)
+    resolved_upload_timeout = (
+        upload_timeout_seconds
+        if upload_timeout_seconds is not None
+        else AWAITVERIFY_UPLOAD_TIMEOUT_SECONDS
+    )
+
+    # Surface the resolved managed_url on every call so a customer
+    # whose env vars or constructor args put them on the wrong
+    # backend (typo, stale staging URL, forgotten override) sees it
+    # in their logs instead of debugging a DNS error from a stack
+    # trace.
+    logger.info("AwaitVerify: using managed_url=%s", client.managed_url)
 
     if idempotency_key is not None:
         logger.warning(
@@ -262,6 +282,19 @@ async def verify_document(
     # pair in matching order. Verify by index in case of skew.
     slot_by_key = {(s.page_index, s.fragment_index): s for s in session.fragments}
 
+    # Bound concurrency so a many-fragment doc on a normal residential
+    # uplink doesn't open 50 simultaneous TLS PUTs and stall every
+    # one of them past the per-PUT timeout.
+    upload_semaphore = asyncio.Semaphore(AWAITVERIFY_UPLOAD_CONCURRENCY)
+
+    async def _bounded_upload(slot: Any, ciphertext: bytes) -> None:
+        async with upload_semaphore:
+            await _managed_upload_fragment(
+                slot=slot,
+                ciphertext=ciphertext,
+                http_timeout_seconds=resolved_upload_timeout,
+            )
+
     upload_tasks: list[Any] = []
     for page_index, fragments_for_page in enumerate(page_fragments):
         for fragment_index, plaintext in enumerate(fragments_for_page):
@@ -281,9 +314,9 @@ async def verify_document(
                     docs_url="https://docs.awaithumans.dev/awaitverify/errors",
                 )
             ciphertext = encrypt_fragment(plaintext, session.dek)
-            upload_tasks.append(_managed_upload_fragment(slot=slot, ciphertext=ciphertext))
+            upload_tasks.append(_bounded_upload(slot, ciphertext))
 
-    # Upload all fragments in parallel — they're independent.
+    # Upload fragments in parallel up to the concurrency cap.
     await asyncio.gather(*upload_tasks)
 
     # Capture the upload session id before forgetting the DEK.

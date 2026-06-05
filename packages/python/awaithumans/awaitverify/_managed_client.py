@@ -19,9 +19,13 @@ from typing import Any
 import httpx
 
 from awaithumans.awaitverify.errors import VerifyError
+from awaithumans.utils.constants import AWAITVERIFY_UPLOAD_TIMEOUT_SECONDS
 
 logger = logging.getLogger("awaithumans.awaitverify.managed_client")
 
+# Default timeout for the JSON control-plane calls (create_upload_session,
+# create_task, poll_task). These are small POST/GETs against the managed
+# backend; 30s is plenty.
 _DEFAULT_TIMEOUT_SECONDS = 30.0
 
 
@@ -114,9 +118,13 @@ async def upload_fragment(
     *,
     slot: FragmentSlot,
     ciphertext: bytes,
-    http_timeout_seconds: float = _DEFAULT_TIMEOUT_SECONDS,
+    http_timeout_seconds: float = AWAITVERIFY_UPLOAD_TIMEOUT_SECONDS,
 ) -> None:
-    """PUT a single encrypted fragment to its signed URL."""
+    """PUT a single encrypted fragment to its signed URL.
+
+    Default timeout is sized for slow residential uplinks under
+    concurrent uploads — see ``AWAITVERIFY_UPLOAD_TIMEOUT_SECONDS``.
+    """
     async with httpx.AsyncClient(timeout=http_timeout_seconds) as client:
         resp = await client.put(
             slot.upload_url,
