@@ -53,6 +53,7 @@ from awaithumans.server.routes import (
     webhook_deliveries,
 )
 from awaithumans.server.routes import embed as embed_routes
+from awaithumans.server.services.demo.fallback_scheduler import run_fallback_scheduler
 from awaithumans.server.services.embed_token_service import parse_origin_allowlist
 from awaithumans.server.services.timeout_scheduler import run_timeout_scheduler
 from awaithumans.server.services.user_service import count_users
@@ -166,6 +167,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
         scheduler_task = asyncio.create_task(run_timeout_scheduler())
         webhook_task = asyncio.create_task(run_webhook_scheduler())
+        demo_fallback_task = asyncio.create_task(run_fallback_scheduler())
         banner_task: asyncio.Task[None] | None = None
         if setup_url:
             banner_task = asyncio.create_task(_print_banner_after_startup(setup_url))
@@ -188,10 +190,13 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             await banner_task
     scheduler_task.cancel()
     webhook_task.cancel()
+    demo_fallback_task.cancel()
     with suppress(asyncio.CancelledError):
         await scheduler_task
     with suppress(asyncio.CancelledError):
         await webhook_task
+    with suppress(asyncio.CancelledError):
+        await demo_fallback_task
     await close_db()
     logger.info("Server shut down")
 
