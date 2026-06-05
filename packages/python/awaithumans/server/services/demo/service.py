@@ -206,13 +206,21 @@ async def submit_demo_field(
         raise DemoSchemaError(f"Field {field_name!r} is not pending for demo {demo_id}.")
 
     # Authorisation: confirm the signed-in reviewer is the assignee on
-    # the linked AwaitVerify task. Skip when reviewer_email is None
-    # (service-level tests that aren't exercising the auth layer).
-    if reviewer_email is not None and record.awaitverify_task_id is not None:
+    # the linked AwaitVerify task. Deny by default: a missing task link,
+    # a vanished task, or a mismatched assignee all reject the submit.
+    # ``reviewer_email`` is None only for the admin-bearer path (callers
+    # that have already proved they own the entire API surface) and for
+    # service-level tests that aren't exercising the auth layer.
+    if reviewer_email is not None:
+        if record.awaitverify_task_id is None:
+            raise DemoSchemaError("Not authorized to submit this field.")
         from awaithumans.server.db.models import Task
 
         task = await session.get(Task, record.awaitverify_task_id)
-        if task is not None and task.assigned_to_email != reviewer_email:
+        if task is None:
+            raise DemoSchemaError("Not authorized to submit this field.")
+        assigned_email = (task.assigned_to_email or "").strip().lower()
+        if not assigned_email or assigned_email != reviewer_email.strip().lower():
             raise DemoSchemaError("Not authorized to submit this field.")
 
     new_corrections: dict[str, Any] = dict(record.field_corrections or {})

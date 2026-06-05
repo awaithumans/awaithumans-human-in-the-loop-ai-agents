@@ -245,11 +245,23 @@ async def _require_demo_reviewer(
             detail="Invalid or expired session.",
         ) from None
 
+    if not claims.is_operator:
+        raise HTTPException(
+            status_code=403,
+            detail="Operator role required.",
+        )
+
     user = await get_user(session, claims.user_id)
     if user is None or not user.active:
         raise HTTPException(
             status_code=401,
             detail="Session user no longer active.",
+        )
+    if not user.is_operator:
+        # Defensive: the claim says operator but the DB row was demoted.
+        raise HTTPException(
+            status_code=403,
+            detail="Operator role required.",
         )
 
     return user.email
