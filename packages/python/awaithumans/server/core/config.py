@@ -158,6 +158,12 @@ class Settings(BaseSettings):
     TURNSTILE_SECRET: str | None = None
     DEMO_REVIEWER_EMAIL: str | None = None
     DEMO_HOT_SLACK_CHANNEL_ID: str | None = None
+    # Slack mention prepended to hot-lane demo notifications. Default
+    # `<!channel>` pings everyone in the founder channel — impossible
+    # to miss on phone/computer. Override with `<@U123ABC>` for a
+    # direct ping or set to an empty string to suppress entirely
+    # (graceful fallback, no exception).
+    DEMO_HOT_SLACK_MENTION: str = "<!channel>"
     DEMO_BOOKING_URL: str = "https://cal.com/awaithumans/15min"
     DEMO_PROVIDER: str = "openai-gpt-5"
     DEMO_CONFIDENCE_THRESHOLD: float = 0.85

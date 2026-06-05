@@ -238,11 +238,21 @@ def _demo_prefix(assign_to: dict[str, Any] | None) -> str:
     so non-demo callers are completely unaffected. The middle-dot (·,
     U+00B7) in `[DEMO·HOT]` is intentional — visually distinct from
     `[DEMO]` at a glance and Unicode-safe in Slack.
+
+    Hot-lane demos additionally get a Slack mention (e.g. `<!channel>` or
+    `<@U123ABC>`) prepended BEFORE the `[DEMO·HOT]` tag. Slack's parser
+    only treats mention syntax as a real ping when it leads the message,
+    so the order is: mention, then tag, then task title. When
+    `DEMO_HOT_SLACK_MENTION` is unset/empty the mention is silently
+    omitted (graceful fallback, no exception).
     """
     if not assign_to or assign_to.get("managed") != "awaitverify":
         return ""
     priority = assign_to.get("priority")
     if priority == Priority.DEMO_HOT.value:
+        mention = (settings.DEMO_HOT_SLACK_MENTION or "").strip()
+        if mention:
+            return f"{mention} [DEMO·HOT] "
         return "[DEMO·HOT] "
     if priority == Priority.DEMO.value:
         return "[DEMO] "

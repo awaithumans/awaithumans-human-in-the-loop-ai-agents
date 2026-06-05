@@ -354,12 +354,26 @@ async def _create_awaitverify_task(*, demo_id: str, page_png: bytes) -> None:
                 "page_image_base64": page_b64,
             }
 
+            # Hot-lane demos (warm prospects) get an URGENT prefix on the
+            # task title so the founder can spot the ping at a glance in
+            # mobile/desktop notifications. The Slack notifier additionally
+            # adds the `[DEMO·HOT]` tag and an optional @-mention (see
+            # _demo_prefix / DEMO_HOT_SLACK_MENTION). Public-lane demos
+            # keep the original `DEMO:` prefix unchanged.
+            if record.is_hot_demo:
+                task_title = (
+                    f"URGENT! DEMO HOT: verify {len(pending_names)} "
+                    f"{record.preset_key} field(s) for {record.email}"
+                )
+            else:
+                task_title = (
+                    f"DEMO: verify {len(pending_names)} "
+                    f"{record.preset_key} field(s) for {record.email}"
+                )
+
             task, _ = await create_task(
                 session,
-                task=(
-                    f"DEMO: verify {len(pending_names)} flagged "
-                    f"{record.preset_key} field(s) for {record.email}"
-                ),
+                task=task_title,
                 payload=payload,
                 payload_schema={"type": "object"},
                 response_schema=response_schema,

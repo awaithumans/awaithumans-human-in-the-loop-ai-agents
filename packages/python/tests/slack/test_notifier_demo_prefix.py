@@ -28,7 +28,41 @@ def test_demo_task_gets_demo_prefix() -> None:
     assert _demo_prefix(assign_to) == "[DEMO] "
 
 
-def test_demo_hot_task_gets_demo_hot_prefix() -> None:
+def test_demo_hot_task_gets_demo_hot_prefix(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Default settings include a mention (`<!channel>`); clear it for
+    # this baseline test so it asserts the bare `[DEMO·HOT] ` shape.
+    monkeypatch.setattr(settings, "DEMO_HOT_SLACK_MENTION", "")
+    assign_to = {"managed": "awaitverify", "priority": "demo_hot"}
+    assert _demo_prefix(assign_to) == "[DEMO·HOT] "
+
+
+def test_hot_demo_message_includes_mention(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Hot-lane demo + configured mention → mention leads the prefix.
+
+    Slack only parses `<!channel>` / `<@U...>` as a real ping when it
+    appears at the start of the message text. The rendered title must
+    therefore begin with the mention, then the `[DEMO·HOT]` tag, then
+    the original task title.
+    """
+    monkeypatch.setattr(settings, "DEMO_HOT_SLACK_MENTION", "<!channel>")
+    assign_to = {"managed": "awaitverify", "priority": "demo_hot"}
+    prefix = _demo_prefix(assign_to)
+    assert prefix == "<!channel> [DEMO·HOT] "
+    # Sanity: the rendered text the notifier composes leads with the
+    # mention so Slack triggers the @channel ping.
+    rendered = f"{prefix}URGENT! DEMO HOT: verify 2 receipt field(s) for x@y.com"
+    assert rendered.startswith("<!channel> [DEMO·HOT]")
+
+
+def test_hot_demo_mention_skipped_when_empty(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Empty mention → tag-only prefix, no leading whitespace or token."""
+    monkeypatch.setattr(settings, "DEMO_HOT_SLACK_MENTION", "")
     assign_to = {"managed": "awaitverify", "priority": "demo_hot"}
     assert _demo_prefix(assign_to) == "[DEMO·HOT] "
 
