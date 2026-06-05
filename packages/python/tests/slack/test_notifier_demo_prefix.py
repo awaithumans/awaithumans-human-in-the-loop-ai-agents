@@ -4,13 +4,23 @@ Reviewers run a shared queue — without the tag, free demo tasks look
 identical to paying ones. The hot-lane variant (warm prospects) gets a
 distinct middle-dot tag so the founder can spot pings instantly.
 
-This test exercises the pure helper directly; the integration with the
-post-message flow is verified by the broader notifier e2e tests.
+The hot lane also overrides the destination Slack channel id via the
+`_hot_lane_channel_override` helper — those tests live at the bottom of
+this file so all demo-routing logic stays in one place.
+
+These tests exercise the pure helpers directly; the integration with
+the post-message flow is verified by the broader notifier e2e tests.
 """
 
 from __future__ import annotations
 
-from awaithumans.server.channels.slack.notifier import _demo_prefix
+import pytest
+
+from awaithumans.server.channels.slack.notifier import (
+    _demo_prefix,
+    _hot_lane_channel_override,
+)
+from awaithumans.server.core.config import settings
 
 
 def test_demo_task_gets_demo_prefix() -> None:
@@ -48,3 +58,83 @@ def test_other_managed_provider_no_prefix() -> None:
     # must not accidentally inherit the demo tag.
     assign_to = {"managed": "something-else", "priority": "demo"}
     assert _demo_prefix(assign_to) == ""
+
+
+# ─── Hot-lane channel override ───────────────────────────────────────
+#
+# `_hot_lane_channel_override` picks the destination Slack channel id
+# when a hot-lane (warm prospect) demo task fires. The contract:
+#
+#   - hot-lane demo + DEMO_HOT_SLACK_CHANNEL_ID set → return that id
+#   - hot-lane demo + DEMO_HOT_SLACK_CHANNEL_ID unset → None (fallback)
+#   - standard demo lane → None (default routing, never the hot channel)
+#   - anything else (paying, OSS, unknown managed) → None
+#
+# The override short-circuits per-task `notify=["slack:#some-channel"]`
+# routes for hot-lane only — that's intentional so the founder's pings
+# land in one place regardless of what the caller put in `notify=`.
+
+
+def test_hot_demo_uses_hot_channel(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Hot-lane demo + configured channel id → that id is returned."""
+    monkeypatch.setattr(settings, "DEMO_HOT_SLACK_CHANNEL_ID", "C-HOT-LANE")
+    assign_to = {"managed": "awaitverify", "priority": "demo_hot"}
+    assert _hot_lane_channel_override(assign_to) == "C-HOT-LANE"
+
+
+def test_hot_demo_falls_back_when_no_channel_set(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Hot-lane demo + no channel configured → None (no exception)."""
+    monkeypatch.setattr(settings, "DEMO_HOT_SLACK_CHANNEL_ID", None)
+    assign_to = {"managed": "awaitverify", "priority": "demo_hot"}
+    assert _hot_lane_channel_override(assign_to) is None
+
+
+def test_hot_demo_falls_back_when_channel_is_empty_string(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Empty string is treated as unset — operator misconfiguration is
+    silent fallback, never a hard error in the notifier path."""
+    monkeypatch.setattr(settings, "DEMO_HOT_SLACK_CHANNEL_ID", "")
+    assign_to = {"managed": "awaitverify", "priority": "demo_hot"}
+    assert _hot_lane_channel_override(assign_to) is None
+
+
+def test_demo_lane_does_not_use_hot_channel(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Public demo lane never lands in the founder channel even when
+    DEMO_HOT_SLACK_CHANNEL_ID is configured."""
+    monkeypatch.setattr(settings, "DEMO_HOT_SLACK_CHANNEL_ID", "C-HOT-LANE")
+    assign_to = {"managed": "awaitverify", "priority": "demo"}
+    assert _hot_lane_channel_override(assign_to) is None
+
+
+def test_standard_priority_does_not_use_hot_channel(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Paying AwaitVerify tasks (priority=standard) keep default routing."""
+    monkeypatch.setattr(settings, "DEMO_HOT_SLACK_CHANNEL_ID", "C-HOT-LANE")
+    assign_to = {"managed": "awaitverify", "priority": "standard"}
+    assert _hot_lane_channel_override(assign_to) is None
+
+
+def test_oss_task_does_not_use_hot_channel(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Non-AwaitVerify (OSS) tasks are never re-routed to the hot channel."""
+    monkeypatch.setattr(settings, "DEMO_HOT_SLACK_CHANNEL_ID", "C-HOT-LANE")
+    assert _hot_lane_channel_override(None) is None
+    assert _hot_lane_channel_override({}) is None
+    assert _hot_lane_channel_override({"user_id": "U123"}) is None
+
+
+def test_other_managed_provider_does_not_use_hot_channel(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A future managed wedge using priority=demo_hot must not piggyback
+    on AwaitVerify's hot channel."""
+    monkeypatch.setattr(settings, "DEMO_HOT_SLACK_CHANNEL_ID", "C-HOT-LANE")
+    assign_to = {"managed": "something-else", "priority": "demo_hot"}
+    assert _hot_lane_channel_override(assign_to) is None

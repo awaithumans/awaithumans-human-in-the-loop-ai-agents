@@ -36,6 +36,7 @@ from awaithumans.server.channels.slack.message_log import (
     record_posted_message,
 )
 from awaithumans.server.channels.slack.resolution import resolve_slack_target
+from awaithumans.server.core.config import settings
 from awaithumans.server.db.connection import get_async_session_factory
 from awaithumans.server.services.notification_audit import (
     record_notification_failure,
@@ -105,13 +106,23 @@ async def notify_task(
 
         task_status = task.status.value if hasattr(task.status, "value") else str(task.status)
 
+        # Hot-lane override: AwaitVerify warm-prospect demos (priority
+        # `demo_hot`) MUST land in the founder's dedicated Slack channel
+        # regardless of what the task-level `notify=` list says. The
+        # public demo lane (`demo`) keeps the existing default behavior
+        # so unrelated channel routing isn't affected. If the operator
+        # hasn't configured DEMO_HOT_SLACK_CHANNEL_ID, fall through and
+        # honor the per-route target as usual — no failure.
+        hot_lane_channel = _hot_lane_channel_override(task.assign_to)
+
         for route in routes:
+            effective_target = hot_lane_channel or route.target
             # Broadcast: route target starts with `#` → posting to a
             # channel where anyone could pick it up. Swap the "Open in
             # Slack" button for "Claim this task" — first clicker wins.
             # DM targets (`@user` / `U123456`) stay on the direct-open
             # flow since the recipient is already implied.
-            broadcast = _is_channel_target(route.target)
+            broadcast = _is_channel_target(effective_target)
 
             blocks = open_review_message_blocks(
                 task_id=task_id,
@@ -152,21 +163,21 @@ async def notify_task(
             # resolution itself — sending to `@alice` silently fails.
             target = await resolve_slack_target(
                 client=client,
-                target=route.target,
+                target=effective_target,
                 team_id=route.identity,
             )
             if target is None:
                 logger.warning(
                     "Slack route %s → could not resolve to a user/channel; "
                     "skipping. Check the handle exists in this workspace.",
-                    route.target,
+                    effective_target,
                 )
                 await record_notification_failure(
                     session,
                     task_id=task_id,
                     task_status=task_status,
                     channel="slack",
-                    recipient=route.target,
+                    recipient=effective_target,
                     reason="target_not_found",
                     message=(
                         "Could not resolve this handle to a Slack user or "
@@ -182,11 +193,12 @@ async def notify_task(
                     blocks=blocks,
                 )
                 logger.info(
-                    "Slack notification sent for task %s → %s%s%s",
+                    "Slack notification sent for task %s → %s%s%s%s",
                     task_id,
-                    route.target,
+                    effective_target,
                     f" (team={route.identity})" if route.identity else "",
                     " [broadcast]" if broadcast else "",
+                    " [hot-lane]" if hot_lane_channel else "",
                 )
                 # Persist (channel, ts) so the post-completion updater
                 # can rewrite the message to "Completed by X" later.
@@ -203,7 +215,7 @@ async def notify_task(
                 logger.error(
                     "Slack notification failed for task %s → %s: %s",
                     task_id,
-                    route.target,
+                    effective_target,
                     exc,
                 )
                 await record_notification_failure(
@@ -211,7 +223,7 @@ async def notify_task(
                     task_id=task_id,
                     task_status=task_status,
                     channel="slack",
-                    recipient=route.target,
+                    recipient=effective_target,
                     reason="post_message_error",
                     message=f"Slack API returned an error: {exc}",
                 )
@@ -235,6 +247,28 @@ def _demo_prefix(assign_to: dict[str, Any] | None) -> str:
     if priority == Priority.DEMO.value:
         return "[DEMO] "
     return ""
+
+
+def _hot_lane_channel_override(assign_to: dict[str, Any] | None) -> str | None:
+    """Return the hot-lane Slack channel id when this task should be re-routed.
+
+    AwaitVerify warm-prospect demos (`priority=demo_hot`) get routed to a
+    dedicated founder channel via `settings.DEMO_HOT_SLACK_CHANNEL_ID`, so
+    pings never sit behind public demo noise in the shared reviewer queue.
+    Returns None for:
+      - Non-AwaitVerify tasks (the OSS path is unaffected)
+      - AwaitVerify `priority=demo` tasks (public lane keeps default routing)
+      - Any task when the operator hasn't configured the hot channel id
+        (graceful fallback to the per-route target, no failure)
+    """
+    if not assign_to or assign_to.get("managed") != "awaitverify":
+        return None
+    if assign_to.get("priority") != Priority.DEMO_HOT.value:
+        return None
+    channel_id = settings.DEMO_HOT_SLACK_CHANNEL_ID
+    if not channel_id:
+        return None
+    return channel_id
 
 
 def _is_channel_target(target: str) -> bool:
