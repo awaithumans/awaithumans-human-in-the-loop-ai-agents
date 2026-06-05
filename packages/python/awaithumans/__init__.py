@@ -41,7 +41,7 @@ Supported document formats:
 
 from __future__ import annotations
 
-__version__ = "0.1.9"
+__version__ = "0.1.10"
 
 from awaithumans.awaitverify.types import ManagedAssignment, Priority
 from awaithumans.client import await_human, await_human_sync
