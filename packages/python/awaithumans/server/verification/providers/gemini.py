@@ -103,17 +103,38 @@ async def verify(config: VerifierConfig, ctx: VerificationContext) -> VerifierRe
 def _to_gemini_schema(schema: dict) -> dict:
     """Convert OpenAPI-ish schema to Gemini's expected shape.
 
-    Gemini accepts a subset of OpenAPI schemas; in practice our shared
-    schema is already compatible. Keeping this as a translation point
-    in case Gemini's quirks diverge — they have historically rejected
-    unknown keys, so we strip anything they don't grok."""
-    allowed_keys = {"type", "properties", "required", "description", "items", "enum"}
-    return _strip_keys(schema, allowed_keys)
+    Gemini accepts a subset of OpenAPI schemas; we strip schema
+    keywords it doesn't grok so it doesn't 400 on unknown fields.
+    Crucially, property NAMES (the keys inside `properties` and the
+    string entries in `required`) are content, not keywords — they
+    must be preserved verbatim."""
+    return _strip_schema_keywords(schema)
 
 
-def _strip_keys(value: Any, allowed: set[str]) -> Any:
-    if isinstance(value, dict):
-        return {k: _strip_keys(v, allowed) for k, v in value.items() if k in allowed}
-    if isinstance(value, list):
-        return [_strip_keys(v, allowed) for v in value]
-    return value
+_SCHEMA_KEYWORDS_GEMINI_KEEPS: frozenset[str] = frozenset(
+    {"type", "properties", "required", "description", "items", "enum"}
+)
+
+
+def _strip_schema_keywords(node: Any) -> Any:
+    """Recursively drop schema keywords Gemini doesn't accept.
+
+    `properties` is a name → subschema map: filter the SUBSCHEMAS but
+    keep every name. Everywhere else (top-level, items, anyOf, etc.)
+    we filter keys against the allowlist."""
+    if isinstance(node, dict):
+        out: dict[str, Any] = {}
+        for k, v in node.items():
+            if k not in _SCHEMA_KEYWORDS_GEMINI_KEEPS:
+                continue
+            if k == "properties" and isinstance(v, dict):
+                out[k] = {name: _strip_schema_keywords(sub) for name, sub in v.items()}
+            elif k == "required" and isinstance(v, list):
+                # Property-name list — strings, not subschemas.
+                out[k] = list(v)
+            else:
+                out[k] = _strip_schema_keywords(v)
+        return out
+    if isinstance(node, list):
+        return [_strip_schema_keywords(v) for v in node]
+    return node

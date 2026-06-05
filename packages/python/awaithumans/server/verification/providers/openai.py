@@ -1,8 +1,10 @@
 """OpenAI verifier.
 
-Uses OpenAI's structured-output (JSON schema response_format) to force
-the model to fill VERIFIER_OUTPUT_SCHEMA. Same shape as the Claude
-verifier so the runner can swap providers without touching state."""
+Uses the Responses API (`client.responses.create`) with a JSON-schema
+text.format to force the model to fill VERIFIER_OUTPUT_SCHEMA. The
+older chat.completions + response_format path was removed because
+gpt-5 rejects it: 'Unsupported parameter: response_format. In the
+Responses API, this parameter has moved to text.format.'"""
 
 from __future__ import annotations
 
@@ -44,33 +46,36 @@ async def verify(config: VerifierConfig, ctx: VerificationContext) -> VerifierRe
     client = AsyncOpenAI(api_key=api_key)
     model = config.model or VERIFIER_OPENAI_DEFAULT_MODEL
 
-    # OpenAI's JSON-schema response_format requires `additionalProperties:
-    # false` and every property listed in `required`. The shared
-    # VERIFIER_OUTPUT_SCHEMA leaves parsed_response optional (not all
-    # tasks need NL parsing); `to_openai_strict_schema()` adapts it.
+    # `to_openai_strict_schema()` widens `parsed_response.type` into a
+    # union (object | string | number | boolean | array | null) because
+    # the field's actual shape depends on each task's response_schema
+    # and isn't known here. Responses-API strict mode (unlike the
+    # older chat.completions strict mode) walks nested type unions and
+    # demands additionalProperties:false on every object branch / items
+    # on every array branch — which we can't satisfy without knowing
+    # the task schema. We send strict=False; the wire-level shape is
+    # still enforced by VERIFIER_OUTPUT_SCHEMA and `_to_result` below.
     strict_schema = to_openai_strict_schema(VERIFIER_OUTPUT_SCHEMA)
 
     try:
-        response = await client.chat.completions.create(
+        response = await client.responses.create(
             model=model,
-            messages=[
-                {"role": "system", "content": build_system_prompt(config.instructions)},
-                {"role": "user", "content": build_user_prompt(ctx)},
-            ],
-            response_format={
-                "type": "json_schema",
-                "json_schema": {
+            instructions=build_system_prompt(config.instructions),
+            input=build_user_prompt(ctx),
+            text={
+                "format": {
+                    "type": "json_schema",
                     "name": VERIFIER_OUTPUT_SCHEMA_NAME,
                     "schema": strict_schema,
-                    "strict": True,
-                },
+                    "strict": False,
+                }
             },
-            max_tokens=VERIFIER_MAX_OUTPUT_TOKENS,
+            max_output_tokens=VERIFIER_MAX_OUTPUT_TOKENS,
         )
     except Exception as exc:  # noqa: BLE001
         raise VerifierProviderError("openai", sanitize_provider_error_detail(str(exc))) from exc
 
-    content = response.choices[0].message.content
+    content = response.output_text
     if not content:
         raise VerifierProviderError("openai", "Empty response content.")
 
