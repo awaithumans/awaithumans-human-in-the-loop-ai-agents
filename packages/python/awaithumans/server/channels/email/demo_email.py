@@ -18,6 +18,7 @@ avoid pulling Jinja2 into the server install.
 
 from __future__ import annotations
 
+import html
 import json
 import logging
 from datetime import datetime, timezone
@@ -61,7 +62,24 @@ def _demo_url() -> str:
 
 
 def _pretty(value: dict[str, Any] | None) -> str:
+    """Pretty JSON for plain-text contexts (.txt templates)."""
     return json.dumps(value or {}, indent=2)
+
+
+def _pretty_html(value: dict[str, Any] | None) -> str:
+    """Pretty JSON, HTML-escaped for safe embedding in HTML templates.
+
+    `record.ai_result` and `record.field_corrections` carry values
+    originating from the AI extractor and from reviewer submissions.
+    Both can contain attacker-controllable strings, so HTML metacharacters
+    must be escaped before they land in the email body.
+    """
+    return html.escape(json.dumps(value or {}, indent=2), quote=False)
+
+
+def _safe_url(value: str) -> str:
+    """Escape operator-configured URLs for safe use inside an href attribute."""
+    return html.escape(value, quote=True)
 
 
 def _final_result(record: DemoRecord) -> dict[str, Any]:
@@ -120,7 +138,15 @@ async def send_demo_review_complete_email(record: DemoRecord) -> None:
         )
         return
 
-    ctx = {
+    html_ctx = {
+        "ai_result_pretty": _pretty_html(record.ai_result),
+        "corrections_pretty": _pretty_html(record.field_corrections),
+        "final_pretty": _pretty_html(_final_result(record)),
+        "signup_url": _safe_url(_signup_url()),
+        "booking_url": _safe_url(settings.DEMO_BOOKING_URL),
+        "demo_url": _safe_url(_demo_url()),
+    }
+    text_ctx = {
         "ai_result_pretty": _pretty(record.ai_result),
         "corrections_pretty": _pretty(record.field_corrections),
         "final_pretty": _pretty(_final_result(record)),
@@ -128,13 +154,13 @@ async def send_demo_review_complete_email(record: DemoRecord) -> None:
         "booking_url": settings.DEMO_BOOKING_URL,
         "demo_url": _demo_url(),
     }
-    html = _load("demo_review_complete.html").substitute(**ctx)
-    text = _load("demo_review_complete.txt").substitute(**ctx)
+    html_body = _load("demo_review_complete.html").substitute(**html_ctx)
+    text = _load("demo_review_complete.txt").substitute(**text_ctx)
 
     message = _build_message(
         to=record.email,
         subject="Your AwaitVerify demo receipt",
-        html=html,
+        html=html_body,
         text=text,
         demo_id=record.id,
     )
@@ -175,17 +201,21 @@ async def send_demo_fallback_email(record: DemoRecord) -> None:
         )
         return
 
-    ctx = {
+    html_ctx = {
+        "ai_result_pretty": _pretty_html(record.ai_result),
+        "signup_url": _safe_url(_signup_url()),
+    }
+    text_ctx = {
         "ai_result_pretty": _pretty(record.ai_result),
         "signup_url": _signup_url(),
     }
-    html = _load("demo_fallback.html").substitute(**ctx)
-    text = _load("demo_fallback.txt").substitute(**ctx)
+    html_body = _load("demo_fallback.html").substitute(**html_ctx)
+    text = _load("demo_fallback.txt").substitute(**text_ctx)
 
     message = _build_message(
         to=record.email,
         subject="Your AwaitVerify demo result",
-        html=html,
+        html=html_body,
         text=text,
         demo_id=record.id,
     )
