@@ -40,6 +40,7 @@ from awaithumans.server.core.middleware import RequestIDMiddleware
 from awaithumans.server.db.connection import close_db, init_db
 from awaithumans.server.routes import (
     auth,
+    demo,
     email,
     health,
     setup,
@@ -447,6 +448,7 @@ def create_app(*, serve_dashboard: bool = True) -> FastAPI:
     app.include_router(users.router, prefix="/api")
     app.include_router(setup.router, prefix="/api")
     app.include_router(webhook_deliveries.router, prefix="/api")
+    app.include_router(demo.router, prefix="/api")
     app.include_router(embed_routes.router)
 
     # ── Dashboard static files ───────────────────────────────────────

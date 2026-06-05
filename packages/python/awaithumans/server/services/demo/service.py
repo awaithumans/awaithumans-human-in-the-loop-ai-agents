@@ -4,14 +4,16 @@ Sequences Turnstile verify, email gate, rate caps, preset model
 resolution, AI extraction, confidence-driven flagging, and the
 DemoRecord insert.
 
-The downstream AwaitVerify-task-creation is wired in Task 13 (it
-needs the route layer plus fragmentation). Here we accept an optional
-background_runner so the orchestrator stays testable in isolation
-and Task 13 can attach the real background dispatcher.
+The downstream AwaitVerify task creation runs as a background task.
+The orchestrator returns to the wizard immediately with the AI result
+so it can render the confirmed fields. The reviewer is then routed via
+the standard AwaitVerify pipeline using ``priority=demo`` (or
+``demo_hot`` for warm prospects).
 """
 
 from __future__ import annotations
 
+import base64
 import logging
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
@@ -117,7 +119,7 @@ async def start_demo(
     await session.refresh(record)
 
     if background_runner is not None and pending:
-        await background_runner(demo_id=record.id)
+        await background_runner(demo_id=record.id, page_png=input_.page_png)
 
     return StartDemoOutput(
         demo_id=record.id,
@@ -141,3 +143,101 @@ def _allowlist_from_settings() -> frozenset[str]:
     if not raw:
         return frozenset()
     return frozenset(domain.strip().lower() for domain in raw.split(",") if domain.strip())
+
+
+# ─── AwaitVerify task creation (background runner) ──────────────────────
+
+
+async def _create_awaitverify_task(*, demo_id: str, page_png: bytes) -> None:
+    """Background runner: create the AwaitVerify task for a demo.
+
+    Runs OUTSIDE the request lifecycle (kicked off by
+    ``BackgroundTasks.add_task`` in the route layer). Acquires its own
+    short-lived session so the orchestrator's request session can be
+    closed immediately after returning the AI result to the wizard.
+
+    On success, writes ``awaitverify_task_id`` back onto the
+    ``DemoRecord`` and flips status to ``awaiting_claim``. On any
+    failure, marks the row ``routing_failed`` so the polling endpoint
+    can surface the fallback state to the wizard. The actual fallback
+    email send lives in Task 15.
+    """
+    from awaithumans.awaitverify.types import ManagedAssignment, Priority
+    from awaithumans.server.db.connection import get_async_session_factory
+    from awaithumans.server.services.task_service import create_task
+
+    factory = get_async_session_factory()
+    async with factory() as session:
+        record = await session.get(DemoRecord, demo_id)
+        if record is None:
+            logger.error("Demo %s missing in background runner", demo_id)
+            return
+
+        try:
+            priority = Priority.DEMO_HOT if record.is_hot_demo else Priority.DEMO
+            assign_to = ManagedAssignment(priority=priority).model_dump()
+
+            ai_values = record.ai_result or {}
+            pending_names = list(record.pending_field_names)
+
+            # Response schema: only the flagged fields are corrected by
+            # the reviewer. High-confidence fields render confirmed in
+            # the wizard immediately and never round-trip.
+            response_schema: dict[str, Any] = {
+                "type": "object",
+                "properties": {name: {"type": "string"} for name in pending_names},
+            }
+
+            # The reviewer needs the original page to verify against.
+            # Embed it base64 in the payload so the dashboard's existing
+            # task view can render it without a separate attachment
+            # store. TODO(task-34): replace with a dashboard demo-mode
+            # surface that fetches the bytes from a dedicated demo
+            # asset endpoint instead of inlining megabytes per task.
+            page_b64 = base64.b64encode(page_png).decode("ascii")
+
+            payload = {
+                "demo_id": demo_id,
+                "preset_key": record.preset_key,
+                "ai_values": ai_values,
+                "ai_confidences": record.field_confidences,
+                "pending_field_names": pending_names,
+                "page_image_base64": page_b64,
+            }
+
+            task, _ = await create_task(
+                session,
+                task=(
+                    f"DEMO: verify {len(pending_names)} flagged "
+                    f"{record.preset_key} field(s) for {record.email}"
+                ),
+                payload=payload,
+                payload_schema={"type": "object"},
+                response_schema=response_schema,
+                timeout_seconds=72 * 3600,
+                idempotency_key=f"demo:{demo_id}",
+                assign_to=assign_to,
+                initial_response={name: ai_values.get(name) for name in pending_names},
+                task_metadata={
+                    "demo_id": demo_id,
+                    "demo_email": record.email,
+                    "preset_key": record.preset_key,
+                    "is_hot_demo": str(record.is_hot_demo).lower(),
+                },
+            )
+            record.awaitverify_task_id = task.id
+            record.status = DemoStatus.AWAITING_CLAIM
+            session.add(record)
+            await session.commit()
+            logger.info(
+                "Created AwaitVerify task %s for demo %s (priority=%s)",
+                task.id,
+                demo_id,
+                priority.value,
+            )
+        except Exception as exc:
+            logger.exception("Failed to create demo AwaitVerify task: %s", exc)
+            record.status = DemoStatus.ROUTING_FAILED
+            session.add(record)
+            await session.commit()
+            # TODO(task-15): send_demo_fallback_email(record)
