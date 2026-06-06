@@ -1,21 +1,30 @@
 """Demo API routes (unauthenticated, gated by Turnstile + rate caps).
 
-The v2 demo surface is two endpoints:
+The v2 demo surface is four endpoints:
 
+    POST /api/demo/propose-schema   (multipart, LLM proposes a schema)
     POST /api/demo/start            (multipart, kicks off extraction)
     GET  /api/demo/{demo_id}/status (polled by the wizard)
+    POST /api/demo/{demo_id}/field/{field_name}/submit (reviewer correction)
 
-No session cookie, no admin bearer. The Turnstile check lives in the
-orchestrator (``start_demo``) along with the per-email / per-IP /
-global daily / cost-ceiling caps. The dashboard auth middleware lets
-``/api/demo/*`` through via the public-prefix allowlist in
-``core/auth.py``.
+No session cookie, no admin bearer on the public routes. The Turnstile
+check lives in the orchestrator (``start_demo``) along with the
+per-email / per-IP / global daily / cost-ceiling caps. The dashboard
+auth middleware lets ``/api/demo/*`` through via the public-prefix
+allowlist in ``core/auth.py``.
+
+The ``propose-schema`` endpoint is a lightweight pre-flight that
+doesn't write a DemoRecord; abuse is bounded by a simple in-memory
+per-IP token bucket (best-effort, single-process). The full rate-limit
+machinery in ``services/demo/rate_limit.py`` only runs on ``/start``.
 """
 
 from __future__ import annotations
 
 import hashlib
+import json
 import logging
+import time
 from typing import Any
 
 from fastapi import (
@@ -39,7 +48,14 @@ from awaithumans.server.core.auth import (
 from awaithumans.server.db.connection import get_session
 from awaithumans.server.db.models import DemoRecord, Task
 from awaithumans.server.schemas.demo import DemoStatusResponse, StartDemoResponse
-from awaithumans.server.services.demo.exceptions import DemoRecordNotFoundError
+from awaithumans.server.services.demo.exceptions import (
+    DemoCapacityError,
+    DemoRecordNotFoundError,
+    DemoSchemaError,
+)
+from awaithumans.server.services.demo.schema_proposer import (
+    propose_schema_from_page,
+)
 from awaithumans.server.services.demo.service import (
     StartDemoInput,
     _create_awaitverify_task,
@@ -57,12 +73,69 @@ router = APIRouter(prefix="/demo", tags=["demo"])
 logger = logging.getLogger("awaithumans.server.routes.demo")
 
 
+# ─── Propose schema (pre-flight, LLM-driven) ───────────────────────────
+
+# Per-IP token bucket for /propose-schema. Single-process, in-memory,
+# best-effort. The full rate-limit machinery (services/demo/rate_limit.py)
+# only runs on /start; this lightweight guard keeps the pre-flight call
+# from being used as a cheap LLM relay. Sized for a demo, not a CDN.
+_PROPOSE_PER_IP_CAP = 30
+_PROPOSE_WINDOW_SECONDS = 3600
+_PROPOSE_IP_BUCKETS: dict[str, list[float]] = {}
+
+
+def _check_propose_ip_bucket(ip_hash: str) -> None:
+    """Tick the per-IP propose bucket. Raise DemoCapacityError if full.
+
+    Drops timestamps older than the window before counting so the
+    bucket self-trims without a separate sweep. The dict can grow
+    indefinitely across many distinct IPs; for the v2 demo footprint
+    that's bounded by the global daily cap on /start anyway.
+    """
+    now = time.monotonic()
+    cutoff = now - _PROPOSE_WINDOW_SECONDS
+    bucket = _PROPOSE_IP_BUCKETS.get(ip_hash, [])
+    bucket = [t for t in bucket if t >= cutoff]
+    if len(bucket) >= _PROPOSE_PER_IP_CAP:
+        _PROPOSE_IP_BUCKETS[ip_hash] = bucket
+        raise DemoCapacityError()
+    bucket.append(now)
+    _PROPOSE_IP_BUCKETS[ip_hash] = bucket
+
+
+@router.post("/propose-schema")
+async def propose_schema_route(
+    request: Request,
+    page_image: UploadFile = File(...),
+) -> dict[str, Any]:
+    """Ask the LLM to propose a Pydantic schema for the page.
+
+    This is a pre-flight aid: the wizard renders the proposed schema in
+    an editable form so the visitor can tweak field names / types
+    before paying for a full extraction. No DemoRecord is written
+    here; the only anti-abuse guard is a simple per-IP token bucket.
+    The visible page is the only input; no email, no Turnstile.
+    """
+    page_png = await page_image.read()
+    if len(page_png) > DEMO_MAX_FILE_SIZE_BYTES:
+        raise HTTPException(status_code=413, detail="Image too large.")
+
+    ip_hash = _hash_ip(request)
+    _check_propose_ip_bucket(ip_hash)
+
+    spec = await propose_schema_from_page(page_png)
+    return spec.model_dump()
+
+
+# ─── Start demo (extraction kickoff) ───────────────────────────────────
+
+
 @router.post("/start", response_model=StartDemoResponse)
 async def start_demo_route(
     request: Request,
     background_tasks: BackgroundTasks,
     email: str = Form(...),
-    preset_key: str = Form(...),
+    schema_spec_json: str = Form(...),
     is_hot_demo: bool = Form(default=False),
     turnstile_token: str = Form(..., alias="turnstileToken"),
     page_image: UploadFile = File(...),
@@ -71,14 +144,20 @@ async def start_demo_route(
     """Kick off a demo extraction.
 
     Reads the page PNG, validates size, hashes the caller IP for the
-    per-IP cap, and hands off to the orchestrator. The orchestrator
-    returns the AI result synchronously; if any fields fell below the
-    confidence threshold, it schedules ``_create_awaitverify_task`` to
-    run after the response is sent so the route stays fast.
+    per-IP cap, parses the visitor-supplied schema spec, and hands off
+    to the orchestrator. The orchestrator returns the AI result
+    synchronously; if any fields fell below the confidence threshold,
+    it schedules ``_create_awaitverify_task`` to run after the response
+    is sent so the route stays fast.
     """
     page_png = await page_image.read()
     if len(page_png) > DEMO_MAX_FILE_SIZE_BYTES:
         raise HTTPException(status_code=413, detail="Image too large.")
+
+    try:
+        schema_spec = json.loads(schema_spec_json)
+    except (json.JSONDecodeError, ValueError) as exc:
+        raise DemoSchemaError(f"Invalid schema spec JSON: {exc}") from exc
 
     ip_hash = _hash_ip(request)
 
@@ -95,7 +174,7 @@ async def start_demo_route(
         input_=StartDemoInput(
             email=email,
             ip_hash=ip_hash,
-            preset_key=preset_key,
+            schema_spec=schema_spec,
             is_hot_demo=is_hot_demo,
             turnstile_token=turnstile_token,
             page_png=page_png,
@@ -166,10 +245,10 @@ def _hash_ip(request: Request) -> str:
 class SubmitFieldBody(BaseModel):
     """Request body for the per-field submit endpoint.
 
-    ``value`` is intentionally ``Any``: presets define the strict
-    per-field types, and Pydantic's JSON parser accepts any JSON
+    ``value`` is intentionally ``Any``: the visitor's schema defines
+    the per-field types, and Pydantic's JSON parser accepts any JSON
     primitive (string, number, bool, null, array, object). Stricter
-    per-preset validation lives in the preset model and can be wired
+    per-schema validation lives in the dynamic model and can be wired
     in here in a follow-up if reviewer typos start landing as garbage."""
 
     value: Any

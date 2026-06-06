@@ -1,19 +1,35 @@
-"""HTTP route tests for ``/api/demo/start`` and ``/api/demo/{id}/status``.
+"""HTTP route tests for ``/api/demo/*``.
 
 These exercise the wire shape (multipart parsing, IP-hash derivation,
-public-prefix bypass on dashboard auth). The Turnstile + extractor
-network calls are stubbed at the orchestrator boundary so the suite
-stays hermetic.
+public-prefix bypass on dashboard auth). The Turnstile + extractor +
+schema-proposer network calls are stubbed at the orchestrator / service
+boundary so the suite stays hermetic.
 """
 
 from __future__ import annotations
 
 import io
+import json
 from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 
 from awaithumans.server.services.demo.extractor import ExtractionResult
+from awaithumans.server.services.demo.schema_builder import (
+    SchemaFieldSpec,
+    SchemaSpec,
+)
+
+_RECEIPT_SPEC_JSON = json.dumps(
+    {
+        "name": "Receipt",
+        "fields": [
+            {"name": "vendor", "type": "str"},
+            {"name": "total_cents", "type": "int"},
+            {"name": "date", "type": "date"},
+        ],
+    }
+)
 
 
 def test_start_demo_happy(client: TestClient) -> None:
@@ -36,7 +52,7 @@ def test_start_demo_happy(client: TestClient) -> None:
             "/api/demo/start",
             data={
                 "email": "alice@acme.com",
-                "preset_key": "Receipt",
+                "schema_spec_json": _RECEIPT_SPEC_JSON,
                 "is_hot_demo": "false",
                 "turnstileToken": "t",
             },
@@ -67,7 +83,7 @@ def test_start_demo_rejects_gmail(client: TestClient) -> None:
             "/api/demo/start",
             data={
                 "email": "alice@gmail.com",
-                "preset_key": "Receipt",
+                "schema_spec_json": _RECEIPT_SPEC_JSON,
                 "is_hot_demo": "false",
                 "turnstileToken": "t",
             },
@@ -80,6 +96,58 @@ def test_start_demo_rejects_gmail(client: TestClient) -> None:
             },
         )
     assert response.status_code == 400, response.text
+
+
+def test_propose_schema_happy(client: TestClient) -> None:
+    """The propose endpoint returns the LLM-proposed schema spec as JSON.
+
+    Schema proposer is mocked at the service boundary so the call doesn't
+    hit Azure. The route just shuttles the spec through to the response.
+    """
+    spec = SchemaSpec(
+        name="Invoice",
+        fields=[
+            SchemaFieldSpec(name="vendor", type="str"),
+            SchemaFieldSpec(name="invoice_number", type="str"),
+            SchemaFieldSpec(name="invoice_date", type="date"),
+            SchemaFieldSpec(name="total_cents", type="int"),
+        ],
+    )
+    # Reset the per-IP propose bucket so this test isn't poisoned by a
+    # noisy neighbor in a shared module-level dict.
+    from awaithumans.server.routes import demo as demo_routes
+
+    demo_routes._PROPOSE_IP_BUCKETS.clear()
+
+    with patch(
+        "awaithumans.server.routes.demo.propose_schema_from_page",
+        return_value=spec,
+    ):
+        response = client.post(
+            "/api/demo/propose-schema",
+            files={
+                "page_image": (
+                    "page.png",
+                    io.BytesIO(b"\x89PNG fake"),
+                    "image/png",
+                )
+            },
+        )
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["name"] == "Invoice"
+    assert [f["name"] for f in body["fields"]] == [
+        "vendor",
+        "invoice_number",
+        "invoice_date",
+        "total_cents",
+    ]
+    assert [f["type"] for f in body["fields"]] == [
+        "str",
+        "str",
+        "date",
+        "int",
+    ]
 
 
 def test_status_route_returns_404(client: TestClient) -> None:

@@ -1,16 +1,16 @@
 """DemoRecord, one row per /demo/start call.
 
-Tracks email, IP hash, hot-lane flag, preset, per-field confidences,
+Tracks email, IP hash, hot-lane flag, the visitor's (possibly
+LLM-proposed, possibly edited) schema spec, per-field confidences,
 pending fields, and partial reviewer corrections. The corresponding
 AwaitVerify task lives in the ``tasks`` table; its id is stored here.
 The polling endpoint reads field_confidences + pending_field_names +
 field_corrections to drive the live in-session result UI.
 
-``schema_spec``, ``provider``, and ``reviewer_result`` from the v1 design
-are intentionally absent in v2: the provider is hardcoded, the schema
-is determined by ``preset_key`` alone, and the reviewer's corrections
-are stored field-by-field in ``field_corrections`` rather than as one
-final blob.
+The schema is now visitor-controlled (proposed by an LLM pre-flight
+call, then editable), so we persist the full ``schema_spec`` JSON
+rather than a preset key. The ``schema_name`` property surfaces the
+spec's CamelCase class name for use in task titles and emails.
 """
 
 from __future__ import annotations
@@ -35,9 +35,12 @@ class DemoRecord(SQLModel, table=True):
     ip_hash: str = Field(index=True)
 
     is_hot_demo: bool = Field(default=False)
-    preset_key: str = Field(
-        description="Schema preset selected by the visitor "
-        "(Invoice / Receipt / ID / Lease / Resume).",
+    schema_spec: dict[str, Any] = Field(
+        sa_column=Column(JSON),
+        default_factory=dict,
+        description="The Pydantic schema spec the extraction ran against "
+        "(name + fields). Proposed by the LLM and (optionally) edited "
+        "by the visitor before submit.",
     )
 
     ai_result: dict[str, Any] | None = Field(
@@ -85,3 +88,15 @@ class DemoRecord(SQLModel, table=True):
         Index("ix_demo_records_ip_created", "ip_hash", "created_at"),
         Index("ix_demo_records_created_status", "created_at", "status"),
     )
+
+    @property
+    def schema_name(self) -> str:
+        """The CamelCase class name from the persisted schema spec.
+
+        Falls back to ``"Document"`` when the spec is missing a name so
+        downstream task titles and emails never render an empty string.
+        """
+        name = self.schema_spec.get("name") if isinstance(self.schema_spec, dict) else None
+        if isinstance(name, str) and name:
+            return name
+        return "Document"

@@ -111,6 +111,10 @@ class Settings(BaseSettings):
     # SDK calls the `model` parameter when talking to Azure.
     AZURE_OPENAI_ENDPOINT: str | None = None
     AZURE_OPENAI_DEPLOYMENT: str | None = None
+    # Optional separate (and typically faster + cheaper) deployment for
+    # the demo schema proposer. When unset, the proposer falls back to
+    # `AZURE_OPENAI_DEPLOYMENT` so single-deployment setups still work.
+    AZURE_OPENAI_SCHEMA_DEPLOYMENT: str | None = None
     AZURE_OPENAI_API_KEY: str | None = None
     AZURE_OPENAI_API_VERSION: str = "2024-10-21"
 

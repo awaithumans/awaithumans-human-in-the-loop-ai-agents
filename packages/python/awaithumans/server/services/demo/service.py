@@ -1,6 +1,6 @@
 """Top-level demo orchestrator.
 
-Sequences Turnstile verify, email gate, rate caps, preset model
+Sequences Turnstile verify, email gate, rate caps, schema spec
 resolution, AI extraction, confidence-driven flagging, and the
 DemoRecord insert.
 
@@ -17,7 +17,7 @@ import asyncio
 import base64
 import logging
 from collections.abc import Awaitable, Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -36,11 +36,14 @@ from awaithumans.server.services.demo.extractor import (
     ExtractionResult,
     run_demo_extraction,
 )
-from awaithumans.server.services.demo.presets import build_preset_model
 from awaithumans.server.services.demo.rate_limit import (
     DemoCaps,
     check_demo_caps,
     estimate_provider_cost_cents,
+)
+from awaithumans.server.services.demo.schema_builder import (
+    build_pydantic_model,
+    spec_from_json,
 )
 from awaithumans.server.services.demo.turnstile import verify_turnstile_token
 
@@ -51,10 +54,10 @@ logger = logging.getLogger("awaithumans.server.services.demo.service")
 class StartDemoInput:
     email: str
     ip_hash: str
-    preset_key: str
-    is_hot_demo: bool
-    turnstile_token: str
-    page_png: bytes
+    schema_spec: dict[str, Any] = field(default_factory=dict)
+    is_hot_demo: bool = False
+    turnstile_token: str = ""
+    page_png: bytes = b""
 
 
 @dataclass
@@ -96,10 +99,14 @@ async def start_demo(
         caps=caps,
     )
 
-    try:
-        response_model = build_preset_model(input_.preset_key)
-    except KeyError as exc:
-        raise DemoSchemaError(f"Unknown preset: {input_.preset_key}") from exc
+    # Resolve the visitor's schema spec to a concrete Pydantic model.
+    # `spec_from_json` raises DemoSchemaError on shape / identifier /
+    # type-allowlist violations; `build_pydantic_model` raises the same
+    # on structural problems. The route layer maps DemoSchemaError to a
+    # 400 via the centralized exception handler.
+    spec = spec_from_json(input_.schema_spec)
+    response_model = build_pydantic_model(spec)
+    schema_spec_persisted = spec.model_dump()
 
     extraction: ExtractionResult = await run_demo_extraction(
         page_png=input_.page_png,
@@ -114,7 +121,7 @@ async def start_demo(
         email_domain=input_.email.rsplit("@", 1)[1].lower(),
         ip_hash=input_.ip_hash,
         is_hot_demo=input_.is_hot_demo,
-        preset_key=input_.preset_key,
+        schema_spec=schema_spec_persisted,
         ai_result=extraction.values,
         field_confidences=extraction.confidences,
         pending_field_names=pending,
@@ -328,6 +335,7 @@ async def _create_awaitverify_task(*, demo_id: str, page_png: bytes) -> None:
 
             ai_values = record.ai_result or {}
             pending_names = list(record.pending_field_names)
+            schema_name = record.schema_name
 
             # Response schema: only the flagged fields are corrected by
             # the reviewer. High-confidence fields render confirmed in
@@ -347,7 +355,8 @@ async def _create_awaitverify_task(*, demo_id: str, page_png: bytes) -> None:
 
             payload = {
                 "demo_id": demo_id,
-                "preset_key": record.preset_key,
+                "schema_spec": record.schema_spec,
+                "schema_name": schema_name,
                 "ai_values": ai_values,
                 "ai_confidences": record.field_confidences,
                 "pending_field_names": pending_names,
@@ -363,12 +372,11 @@ async def _create_awaitverify_task(*, demo_id: str, page_png: bytes) -> None:
             if record.is_hot_demo:
                 task_title = (
                     f"URGENT! DEMO HOT: verify {len(pending_names)} "
-                    f"{record.preset_key} field(s) for {record.email}"
+                    f"flagged {schema_name} field(s) for {record.email}"
                 )
             else:
                 task_title = (
-                    f"DEMO: verify {len(pending_names)} "
-                    f"{record.preset_key} field(s) for {record.email}"
+                    f"DEMO: verify {len(pending_names)} {schema_name} field(s) for {record.email}"
                 )
 
             task, _ = await create_task(
@@ -384,7 +392,7 @@ async def _create_awaitverify_task(*, demo_id: str, page_png: bytes) -> None:
                 task_metadata={
                     "demo_id": demo_id,
                     "demo_email": record.email,
-                    "preset_key": record.preset_key,
+                    "schema_name": schema_name,
                     "is_hot_demo": str(record.is_hot_demo).lower(),
                 },
             )

@@ -20,12 +20,21 @@ from awaithumans.server.services.demo.service import (
     submit_demo_field,
 )
 
+_RECEIPT_SPEC = {
+    "name": "Receipt",
+    "fields": [
+        {"name": "vendor", "type": "str"},
+        {"name": "total_cents", "type": "int"},
+        {"name": "date", "type": "date"},
+    ],
+}
+
 
 def _input(**overrides) -> StartDemoInput:
     base = {
         "email": "alice@acme.com",
         "ip_hash": "ip-1",
-        "preset_key": "Receipt",
+        "schema_spec": _RECEIPT_SPEC,
         "is_hot_demo": False,
         "turnstile_token": "t",
         "page_png": b"\x89PNG fake",
@@ -62,7 +71,8 @@ async def test_happy_path_creates_demo_record(db_session: AsyncSession) -> None:
     rows = (await db_session.execute(select(DemoRecord))).scalars().all()
     assert len(rows) == 1
     record = rows[0]
-    assert record.preset_key == "Receipt"
+    assert record.schema_spec["name"] == "Receipt"
+    assert record.schema_name == "Receipt"
     assert record.is_hot_demo is False
     assert record.field_confidences == {
         "vendor": 0.97,
@@ -115,7 +125,10 @@ async def test_rejects_bad_turnstile(db_session: AsyncSession) -> None:
 
 
 @pytest.mark.asyncio
-async def test_rejects_unknown_preset(db_session: AsyncSession) -> None:
+async def test_rejects_malformed_schema_spec(db_session: AsyncSession) -> None:
+    """A malformed schema spec (non-identifier field name, unsupported
+    type, missing name, etc.) surfaces as DemoSchemaError so the route
+    returns 400 with the validator's message."""
     with (
         patch(
             "awaithumans.server.services.demo.service.verify_turnstile_token",
@@ -123,7 +136,15 @@ async def test_rejects_unknown_preset(db_session: AsyncSession) -> None:
         ),
         pytest.raises(DemoSchemaError),
     ):
-        await start_demo(db_session, input_=_input(preset_key="NotAPreset"))
+        await start_demo(
+            db_session,
+            input_=_input(
+                schema_spec={
+                    "name": "NotAClass!",  # not a valid Python identifier
+                    "fields": [{"name": "vendor", "type": "str"}],
+                }
+            ),
+        )
 
 
 @pytest.mark.asyncio
@@ -133,7 +154,7 @@ async def test_caps_block_second_call(db_session: AsyncSession) -> None:
             email="alice@acme.com",
             email_domain="acme.com",
             ip_hash="ip-1",
-            preset_key="Receipt",
+            schema_spec=_RECEIPT_SPEC,
             status=DemoStatus.EMAIL_SENT,
             created_at=datetime.now(timezone.utc),
         )
@@ -149,6 +170,54 @@ async def test_caps_block_second_call(db_session: AsyncSession) -> None:
         await start_demo(db_session, input_=_input())
 
 
+# ─── Schema proposer (service-level) ───────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_propose_schema_returns_spec() -> None:
+    """The proposer parses the LLM JSON into a SchemaSpec. Azure call
+    is mocked at the chat.completions boundary so the test stays
+    hermetic."""
+    from types import SimpleNamespace
+    from unittest.mock import AsyncMock
+
+    from awaithumans.server.services.demo.schema_proposer import (
+        propose_schema_from_page,
+    )
+
+    fake_response = SimpleNamespace(
+        choices=[
+            SimpleNamespace(
+                message=SimpleNamespace(
+                    content=(
+                        '{"name": "Invoice", "fields": ['
+                        '{"name": "vendor", "type": "str"},'
+                        '{"name": "total_cents", "type": "int"},'
+                        '{"name": "invoice_date", "type": "date"}'
+                        "]}"
+                    )
+                )
+            )
+        ]
+    )
+    fake_client = SimpleNamespace(
+        chat=SimpleNamespace(
+            completions=SimpleNamespace(
+                create=AsyncMock(return_value=fake_response),
+            )
+        )
+    )
+    with patch(
+        "awaithumans.server.services.demo.schema_proposer._build_client",
+        return_value=fake_client,
+    ):
+        spec = await propose_schema_from_page(b"\x89PNG fake")
+
+    assert spec.name == "Invoice"
+    assert [f.name for f in spec.fields] == ["vendor", "total_cents", "invoice_date"]
+    assert [f.type for f in spec.fields] == ["str", "int", "date"]
+
+
 # ─── Per-field submit ──────────────────────────────────────────────────
 
 
@@ -160,7 +229,7 @@ async def test_submit_field_updates_correction(db_session: AsyncSession) -> None
         email="alice@acme.com",
         email_domain="acme.com",
         ip_hash="ip-1",
-        preset_key="Receipt",
+        schema_spec=_RECEIPT_SPEC,
         ai_result={"vendor": "Acme", "total_cents": 1299, "date": "2026-01-01"},
         field_confidences={"vendor": 0.97, "total_cents": 0.62, "date": 0.7},
         pending_field_names=["total_cents", "date"],
@@ -191,7 +260,7 @@ async def test_submit_unknown_field_raises(db_session: AsyncSession) -> None:
         email="alice@acme.com",
         email_domain="acme.com",
         ip_hash="ip-1",
-        preset_key="Receipt",
+        schema_spec=_RECEIPT_SPEC,
         ai_result={"vendor": "Acme"},
         field_confidences={"vendor": 0.97},
         pending_field_names=["vendor"],
@@ -218,7 +287,7 @@ async def test_submit_completes_when_last_field(db_session: AsyncSession) -> Non
         email="alice@acme.com",
         email_domain="acme.com",
         ip_hash="ip-1",
-        preset_key="Receipt",
+        schema_spec=_RECEIPT_SPEC,
         ai_result={"vendor": "Acme", "total_cents": 1299},
         field_confidences={"vendor": 0.97, "total_cents": 0.62},
         pending_field_names=["total_cents"],

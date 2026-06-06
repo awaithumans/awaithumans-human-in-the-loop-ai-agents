@@ -39,7 +39,10 @@ def _seed(
         email=email,
         email_domain=email.split("@", 1)[1],
         ip_hash=ip_hash,
-        preset_key="Invoice",
+        schema_spec={
+            "name": "Invoice",
+            "fields": [{"name": "vendor", "type": "str"}],
+        },
         cost_estimate_cents=cost_cents,
         status=status,
         created_at=datetime.now(timezone.utc) - age,
