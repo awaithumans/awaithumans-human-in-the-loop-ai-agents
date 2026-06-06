@@ -11,6 +11,7 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 
+from pydantic import AliasChoices, Field
 from pydantic_settings import BaseSettings
 
 logger = logging.getLogger("awaithumans.server.core.config")
@@ -53,7 +54,13 @@ class Settings(BaseSettings):
     EMAIL_FROM_NAME: str | None = None  # "Acme Tasks"
     EMAIL_REPLY_TO: str | None = None
     # Resend transport.
-    RESEND_KEY: str | None = None
+    RESEND_KEY: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices(
+            "AWAITHUMANS_RESEND_KEY",
+            "RESEND_API_KEY",
+        ),
+    )
     # SMTP transport.
     SMTP_HOST: str | None = None
     SMTP_PORT: int = 587
