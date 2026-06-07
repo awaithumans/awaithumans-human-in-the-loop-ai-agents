@@ -120,6 +120,13 @@ server = [
     # provider SDK here keeps `pip install awaithumans[server]` as the
     # single command to stand up the full demo stack.
     "openai>=1.50.0",
+    # Permissive date parsing for the demo schema_builder: the LLM
+    # returns dates in whatever format appears on the document
+    # (localised abbreviations, slashes, English long form). dateutil
+    # absorbs all of those and emits a real `datetime.date` so the
+    # Pydantic model accepts it without forcing the reviewer to
+    # hand-fix every demo task.
+    "python-dateutil>=2.9.0",
 ]
 temporal = [
     "temporalio>=1.7.0",

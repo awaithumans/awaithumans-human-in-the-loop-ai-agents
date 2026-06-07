@@ -19,18 +19,28 @@ SupportedType = Literal["str", "int", "float", "bool", "date", "list[str]"]
 
 
 def _coerce_date(value: Any) -> Any:
-    """Tolerate datetime strings on `date` fields.
+    """Tolerate messy date strings on `date` fields.
 
-    The demo extractor's LLM sometimes returns full ISO datetimes
-    ("2026-01-15T00:00:00Z") for fields the schema declared as `date`.
-    Pydantic's strict date parser rejects those. We coerce: strip the
-    time component when present, leave existing date strings / date
-    objects untouched. Non-string inputs pass through to Pydantic's
-    normal validation so date-like objects still work.
+    The demo extractor's LLM returns whatever date format appears on
+    the document: ISO ("2026-01-15"), full ISO datetime
+    ("2026-01-15T00:00:00Z"), localised forms like "16/feb./2024", and
+    free text like "Jan 15, 2026". Pydantic's strict ISO parser
+    rejects most of these. We hand them to dateutil with `fuzzy=True`
+    and emit a real `datetime.date`. Strings that even dateutil can't
+    parse pass through unchanged so Pydantic surfaces a clean error
+    that the reviewer can correct.
     """
-    if isinstance(value, str) and "T" in value:
-        return value.split("T", 1)[0]
-    return value
+    if not isinstance(value, str):
+        return value
+    s = value.strip()
+    if not s:
+        return value
+    try:
+        from dateutil import parser as _du_parser  # noqa: PLC0415
+
+        return _du_parser.parse(s, fuzzy=True).date()
+    except (ValueError, ImportError, TypeError, OverflowError):
+        return value
 
 
 _DateLike = Annotated[dt.date, BeforeValidator(_coerce_date)]
