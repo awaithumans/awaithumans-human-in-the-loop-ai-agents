@@ -17,7 +17,7 @@ import asyncio
 import base64
 import logging
 from collections.abc import Awaitable, Callable
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -45,6 +45,9 @@ from awaithumans.server.services.demo.schema_builder import (
     build_pydantic_model,
     spec_from_json,
 )
+from awaithumans.server.services.demo.schema_proposer import (
+    propose_schema_from_page,
+)
 from awaithumans.server.services.demo.turnstile import verify_turnstile_token
 
 logger = logging.getLogger("awaithumans.server.services.demo.service")
@@ -54,7 +57,11 @@ logger = logging.getLogger("awaithumans.server.services.demo.service")
 class StartDemoInput:
     email: str
     ip_hash: str
-    schema_spec: dict[str, Any] = field(default_factory=dict)
+    # Optional: when None the orchestrator auto-proposes a schema from
+    # the page via the LLM before extraction. The wizard collapsed to
+    # 3 steps and never sends a spec; explicit specs are still accepted
+    # for service-level tests and any future caller that wants control.
+    schema_spec: dict[str, Any] | None = None
     is_hot_demo: bool = False
     turnstile_token: str = ""
     page_png: bytes = b""
@@ -98,6 +105,14 @@ async def start_demo(
         per_call_cost_cents=per_call_cost,
         caps=caps,
     )
+
+    # The collapsed 3-step wizard never sends a schema spec; the
+    # orchestrator auto-proposes one from the page image via the same
+    # LLM that powers the extractor. Service-level tests still pass a
+    # spec explicitly to exercise the deterministic path.
+    if input_.schema_spec is None:
+        proposed_spec = await propose_schema_from_page(input_.page_png)
+        input_.schema_spec = proposed_spec.model_dump()
 
     # Resolve the visitor's schema spec to a concrete Pydantic model.
     # `spec_from_json` raises DemoSchemaError on shape / identifier /

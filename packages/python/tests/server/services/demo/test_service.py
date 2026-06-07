@@ -84,6 +84,74 @@ async def test_happy_path_creates_demo_record(db_session: AsyncSession) -> None:
 
 
 @pytest.mark.asyncio
+async def test_auto_proposes_when_schema_omitted(db_session: AsyncSession) -> None:
+    """When the caller omits a schema spec, the orchestrator asks the
+    LLM to propose one before running extraction. The proposed spec
+    persists on the DemoRecord and the proposer is called exactly once.
+
+    The collapsed 3-step wizard relies on this path: it no longer asks
+    the visitor to review or edit a schema, so every call from the
+    landing page hits this branch.
+    """
+    from awaithumans.server.services.demo.schema_builder import (
+        SchemaFieldSpec,
+        SchemaSpec,
+    )
+
+    proposed = SchemaSpec(
+        name="Receipt",
+        fields=[
+            SchemaFieldSpec(name="vendor", type="str"),
+            SchemaFieldSpec(name="total_cents", type="int"),
+            SchemaFieldSpec(name="date", type="date"),
+        ],
+    )
+
+    with (
+        patch(
+            "awaithumans.server.services.demo.service.verify_turnstile_token",
+            return_value=None,
+        ),
+        patch(
+            "awaithumans.server.services.demo.service.propose_schema_from_page",
+            return_value=proposed,
+        ) as mock_propose,
+        patch("awaithumans.server.services.demo.service.run_demo_extraction") as mock_run,
+    ):
+        mock_run.return_value = ExtractionResult(
+            values={"vendor": "Acme", "total_cents": 1299, "date": "2026-01-01"},
+            confidences={"vendor": 0.97, "total_cents": 0.62, "date": 0.95},
+            cost_cents=6,
+        )
+        # Note: schema_spec is intentionally omitted so the dataclass
+        # default (None) kicks in and the orchestrator hits the
+        # auto-propose path.
+        output = await start_demo(
+            db_session,
+            input_=StartDemoInput(
+                email="alice@acme.com",
+                ip_hash="ip-1",
+                turnstile_token="t",
+                page_png=b"\x89PNG fake",
+            ),
+        )
+
+    assert mock_propose.call_count == 1
+    assert output.demo_id
+
+    from sqlalchemy import select
+
+    record = (await db_session.execute(select(DemoRecord))).scalars().one()
+    assert record.schema_spec is not None
+    assert record.schema_spec["name"] == "Receipt"
+    assert [f["name"] for f in record.schema_spec["fields"]] == [
+        "vendor",
+        "total_cents",
+        "date",
+    ]
+
+
+@pytest.mark.asyncio
 async def test_hot_demo_flag_persisted(db_session: AsyncSession) -> None:
     with (
         patch(

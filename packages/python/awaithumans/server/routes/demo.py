@@ -135,7 +135,7 @@ async def start_demo_route(
     request: Request,
     background_tasks: BackgroundTasks,
     email: str = Form(...),
-    schema_spec_json: str = Form(...),
+    schema_spec_json: str | None = Form(default=None),
     is_hot_demo: bool = Form(default=False),
     turnstile_token: str = Form(..., alias="turnstileToken"),
     page_image: UploadFile = File(...),
@@ -144,20 +144,25 @@ async def start_demo_route(
     """Kick off a demo extraction.
 
     Reads the page PNG, validates size, hashes the caller IP for the
-    per-IP cap, parses the visitor-supplied schema spec, and hands off
-    to the orchestrator. The orchestrator returns the AI result
-    synchronously; if any fields fell below the confidence threshold,
-    it schedules ``_create_awaitverify_task`` to run after the response
-    is sent so the route stays fast.
+    per-IP cap, parses the (optional) visitor-supplied schema spec, and
+    hands off to the orchestrator. When ``schema_spec_json`` is omitted
+    (the default for the collapsed 3-step wizard) the orchestrator
+    auto-proposes a schema from the page before extracting. The
+    orchestrator returns the AI result synchronously; if any fields
+    fell below the confidence threshold, it schedules
+    ``_create_awaitverify_task`` to run after the response is sent so
+    the route stays fast.
     """
     page_png = await page_image.read()
     if len(page_png) > DEMO_MAX_FILE_SIZE_BYTES:
         raise HTTPException(status_code=413, detail="Image too large.")
 
-    try:
-        schema_spec = json.loads(schema_spec_json)
-    except (json.JSONDecodeError, ValueError) as exc:
-        raise DemoSchemaError(f"Invalid schema spec JSON: {exc}") from exc
+    schema_spec: dict[str, Any] | None = None
+    if schema_spec_json:
+        try:
+            schema_spec = json.loads(schema_spec_json)
+        except (json.JSONDecodeError, ValueError) as exc:
+            raise DemoSchemaError(f"Invalid schema spec JSON: {exc}") from exc
 
     ip_hash = _hash_ip(request)
 

@@ -54,7 +54,8 @@ _SYSTEM_PROMPT = (
     "(4) The schema name must be a CamelCase Python identifier "
     "describing the document (e.g. Invoice, Receipt, GovernmentID, "
     "PurchaseOrder). "
-    "(5) Return JSON only, no prose, matching this exact shape: "
+    "(5) Return ONLY a JSON object. No prose, no markdown, no code "
+    "fences. The object must match this exact shape: "
     '{"name": "<CamelCase>", "fields": [{"name": "<snake_case>", '
     '"type": "<one of the supported types>"}, ...]}. '
     "Pick the most useful fields for the document, not every possible "
@@ -64,7 +65,8 @@ _SYSTEM_PROMPT = (
 
 _USER_PROMPT = (
     "Look at the page image and propose a Pydantic schema describing "
-    "the most useful structured fields on that page. Return JSON only."
+    "the most useful structured fields on that page. "
+    "Return ONLY a JSON object. No prose, no markdown, no code fences."
 )
 
 
@@ -114,10 +116,12 @@ async def propose_schema_from_page(page_png: bytes) -> SchemaSpec:
     try:
         client = _build_client()
         image_b64 = base64.standard_b64encode(page_png).decode("ascii")
+        # The Azure Responses-API-style deployment rejects the legacy
+        # `response_format` parameter; the system prompt is hardened to
+        # require a bare JSON object instead.
         response = await client.chat.completions.create(
             model=_resolve_deployment(),
             max_tokens=_MAX_TOKENS,
-            response_format={"type": "json_object"},
             messages=[
                 {"role": "system", "content": _SYSTEM_PROMPT},
                 {

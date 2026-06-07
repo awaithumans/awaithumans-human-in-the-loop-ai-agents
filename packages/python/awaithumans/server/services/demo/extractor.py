@@ -41,7 +41,8 @@ _SYSTEM_PROMPT = (
     "0.5 means roughly half-certain, 0.0 means total guess. Be honest "
     "about uncertainty. Fields you can read clearly should be 0.9 or "
     "higher; fields where the image is blurry or the value is "
-    "ambiguous should drop below 0.85. Return JSON only, no prose."
+    "ambiguous should drop below 0.85. "
+    "Return ONLY a JSON object. No prose, no markdown, no code fences."
 )
 
 
@@ -109,12 +110,12 @@ async def run_demo_extraction(
         image_b64 = base64.standard_b64encode(page_png).decode("ascii")
         # In Azure mode the OpenAI SDK accepts the DEPLOYMENT name as
         # the `model` argument and dispatches to that deployment under
-        # the hood. `response_format={"type": "json_object"}` enables
-        # JSON mode so the model is forced to return parseable JSON.
+        # the hood. The Azure Responses-API-style deployment rejects the
+        # legacy `response_format` parameter; the system prompt is
+        # hardened to require a bare JSON object instead.
         response = await client.chat.completions.create(
             model=settings.AZURE_OPENAI_DEPLOYMENT or "",
             max_tokens=_MAX_TOKENS,
-            response_format={"type": "json_object"},
             messages=[
                 {"role": "system", "content": _SYSTEM_PROMPT},
                 {
