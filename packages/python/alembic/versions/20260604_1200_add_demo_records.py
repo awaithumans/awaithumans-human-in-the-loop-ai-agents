@@ -8,6 +8,7 @@ Create Date: 2026-06-04 12:00:00
 from __future__ import annotations
 
 import sqlalchemy as sa
+
 from alembic import op
 
 revision = "20260604_1200"
@@ -15,22 +16,28 @@ down_revision = "8b4ed1c70a5f"
 branch_labels = None
 depends_on = None
 
-_DEMO_STATUS_VALUES = (
-    "extracting",
-    "routing",
-    "awaiting_claim",
-    "claimed",
-    "partially_done",
-    "review_complete",
-    "email_sent",
-    "email_failed",
-    "routing_failed",
-    "fallback_sent",
+# SQLAlchemy stores Python-enum columns as the enum's NAME (uppercase),
+# not .value (lowercase). The native Postgres ENUM (and SQLite CHECK)
+# must agree, otherwise `WHERE status IN (...)` emits casts like
+# `$1::demostatus` against labels that don't match what got stored.
+# See the existing `taskstatus` enum in the baseline migration for the
+# canonical pattern in this codebase.
+_DEMO_STATUS_NAMES = (
+    "EXTRACTING",
+    "ROUTING",
+    "AWAITING_CLAIM",
+    "CLAIMED",
+    "PARTIALLY_DONE",
+    "REVIEW_COMPLETE",
+    "EMAIL_SENT",
+    "EMAIL_FAILED",
+    "ROUTING_FAILED",
+    "FALLBACK_SENT",
 )
 
 
 def upgrade() -> None:
-    demo_status = sa.Enum(*_DEMO_STATUS_VALUES, name="demostatus", native_enum=False)
+    demo_status = sa.Enum(*_DEMO_STATUS_NAMES, name="demostatus")
     op.create_table(
         "demo_records",
         sa.Column("id", sa.String(), primary_key=True),
@@ -44,7 +51,7 @@ def upgrade() -> None:
         sa.Column("pending_field_names", sa.JSON(), nullable=False),
         sa.Column("field_corrections", sa.JSON(), nullable=False),
         sa.Column("awaitverify_task_id", sa.String(), nullable=True),
-        sa.Column("status", demo_status, nullable=False, server_default="extracting"),
+        sa.Column("status", demo_status, nullable=False, server_default="EXTRACTING"),
         sa.Column("cost_estimate_cents", sa.Integer(), nullable=False, server_default="0"),
         sa.Column(
             "created_at",
@@ -80,3 +87,9 @@ def downgrade() -> None:
     op.drop_index("ix_demo_records_email_domain", table_name="demo_records")
     op.drop_index("ix_demo_records_email", table_name="demo_records")
     op.drop_table("demo_records")
+    # The Enum type lingers on Postgres after drop_table; explicitly drop
+    # so a fresh upgrade can recreate it. No-op on SQLite (no native
+    # ENUM type backing the column).
+    bind = op.get_bind()
+    if bind.dialect.name == "postgresql":
+        sa.Enum(name="demostatus").drop(bind, checkfirst=True)
