@@ -157,7 +157,10 @@ async def run_demo_extraction(
         logger.warning("Demo extractor schema mismatch: %s", exc)
         raise DemoProviderError(_PROVIDER_LABEL) from exc
 
-    values = validated.model_dump()
+    # `mode="json"` returns date/datetime as ISO strings so the
+    # downstream JSON storage (DemoRecord.ai_result, PG JSON column)
+    # accepts the dict without a custom serializer.
+    values = validated.model_dump(mode="json")
     confidences: dict[str, float] = {}
     raw_confidences_dict = raw_confidences if isinstance(raw_confidences, dict) else {}
     for field_name in values:
