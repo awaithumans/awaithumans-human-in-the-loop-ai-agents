@@ -9,20 +9,38 @@ from __future__ import annotations
 
 import datetime as dt
 import keyword
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, Field, create_model
+from pydantic import BaseModel, BeforeValidator, Field, create_model
 
 from awaithumans.server.services.demo.exceptions import DemoSchemaError
 
 SupportedType = Literal["str", "int", "float", "bool", "date", "list[str]"]
 
-_TYPE_MAP: dict[str, type] = {
+
+def _coerce_date(value: Any) -> Any:
+    """Tolerate datetime strings on `date` fields.
+
+    The demo extractor's LLM sometimes returns full ISO datetimes
+    ("2026-01-15T00:00:00Z") for fields the schema declared as `date`.
+    Pydantic's strict date parser rejects those. We coerce: strip the
+    time component when present, leave existing date strings / date
+    objects untouched. Non-string inputs pass through to Pydantic's
+    normal validation so date-like objects still work.
+    """
+    if isinstance(value, str) and "T" in value:
+        return value.split("T", 1)[0]
+    return value
+
+
+_DateLike = Annotated[dt.date, BeforeValidator(_coerce_date)]
+
+_TYPE_MAP: dict[str, Any] = {
     "str": str,
     "int": int,
     "float": float,
     "bool": bool,
-    "date": dt.date,
+    "date": _DateLike,
     "list[str]": list[str],
 }
 
@@ -63,7 +81,7 @@ def build_pydantic_model(spec: SchemaSpec) -> type[BaseModel]:
     _validate_model_name(spec.name)
     _validate_fields(spec.fields)
 
-    fields_for_create: dict[str, tuple[type, Any]] = {}
+    fields_for_create: dict[str, tuple[Any, Any]] = {}
     for field in spec.fields:
         py_type = _TYPE_MAP.get(field.type)
         if py_type is None:
