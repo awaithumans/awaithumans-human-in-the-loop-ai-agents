@@ -108,27 +108,23 @@ async def run_demo_extraction(
     try:
         client = _build_client()
         image_b64 = base64.standard_b64encode(page_png).decode("ascii")
-        # In Azure mode the OpenAI SDK accepts the DEPLOYMENT name as
-        # the `model` argument and dispatches to that deployment under
-        # the hood. The Azure Responses-API-style deployment rejects the
-        # legacy `response_format` parameter; the system prompt is
-        # hardened to require a bare JSON object instead.
-        response = await client.chat.completions.create(
+        # Azure's Responses API takes `input` (not `messages`),
+        # `max_output_tokens` (not `max_tokens`), and content types
+        # `input_text` / `input_image`. The system prompt enforces JSON.
+        response = await client.responses.create(
             model=settings.AZURE_OPENAI_DEPLOYMENT or "",
-            max_tokens=_MAX_TOKENS,
-            messages=[
+            max_output_tokens=_MAX_TOKENS,
+            input=[
                 {"role": "system", "content": _SYSTEM_PROMPT},
                 {
                     "role": "user",
                     "content": [
                         {
-                            "type": "image_url",
-                            "image_url": {
-                                "url": f"data:image/png;base64,{image_b64}",
-                            },
+                            "type": "input_image",
+                            "image_url": f"data:image/png;base64,{image_b64}",
                         },
                         {
-                            "type": "text",
+                            "type": "input_text",
                             "text": _build_user_prompt(response_model),
                         },
                     ],
@@ -179,21 +175,22 @@ async def run_demo_extraction(
 
 
 def _extract_text(response: Any) -> str:
-    """Pull the assistant text out of a ChatCompletion response.
+    """Pull the assistant text out of a Responses API response.
 
-    Tolerates both the real OpenAI SDK shape (`response.choices[0]
-    .message.content`) and minimal SimpleNamespace test doubles. Returns
-    an empty string when the response is malformed; the JSON parse step
-    above will then surface a clean DemoProviderError to the caller.
+    Prefers the SDK's `output_text` convenience accessor; falls back to
+    walking `output[*].content[*].text` for test doubles that don't
+    populate the shortcut. Returns "" on malformed responses; the JSON
+    parse step above then raises a clean DemoProviderError.
     """
-    choices = getattr(response, "choices", None)
-    if not choices:
-        return ""
-    first = choices[0]
-    message = getattr(first, "message", None)
-    if message is None:
-        return ""
-    content = getattr(message, "content", None)
-    if isinstance(content, str):
-        return content
-    return ""
+    direct = getattr(response, "output_text", None)
+    if isinstance(direct, str) and direct:
+        return direct
+    output = getattr(response, "output", None) or []
+    parts: list[str] = []
+    for block in output:
+        content = getattr(block, "content", None) or []
+        for piece in content:
+            text = getattr(piece, "text", None)
+            if isinstance(text, str):
+                parts.append(text)
+    return "".join(parts)

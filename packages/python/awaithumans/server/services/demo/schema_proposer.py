@@ -116,24 +116,22 @@ async def propose_schema_from_page(page_png: bytes) -> SchemaSpec:
     try:
         client = _build_client()
         image_b64 = base64.standard_b64encode(page_png).decode("ascii")
-        # The Azure Responses-API-style deployment rejects the legacy
-        # `response_format` parameter; the system prompt is hardened to
-        # require a bare JSON object instead.
-        response = await client.chat.completions.create(
+        # Azure's Responses API takes `input` (not `messages`),
+        # `max_output_tokens` (not `max_tokens`), and content types
+        # `input_text` / `input_image`. The system prompt enforces JSON.
+        response = await client.responses.create(
             model=_resolve_deployment(),
-            max_tokens=_MAX_TOKENS,
-            messages=[
+            max_output_tokens=_MAX_TOKENS,
+            input=[
                 {"role": "system", "content": _SYSTEM_PROMPT},
                 {
                     "role": "user",
                     "content": [
                         {
-                            "type": "image_url",
-                            "image_url": {
-                                "url": f"data:image/png;base64,{image_b64}",
-                            },
+                            "type": "input_image",
+                            "image_url": f"data:image/png;base64,{image_b64}",
                         },
-                        {"type": "text", "text": _USER_PROMPT},
+                        {"type": "input_text", "text": _USER_PROMPT},
                     ],
                 },
             ],
@@ -195,20 +193,22 @@ def _normalize_in_place(parsed: dict[str, Any]) -> None:
 
 
 def _extract_text(response: Any) -> str:
-    """Pull the assistant text out of a ChatCompletion response.
+    """Pull the assistant text out of a Responses API response.
 
-    Tolerates both the real OpenAI SDK shape and minimal test doubles;
-    matches `extractor._extract_text` so we share behavior across the
-    two LLM call sites.
+    The SDK exposes `response.output_text` as a convenience accessor
+    that concatenates all text outputs across blocks. Tolerates test
+    doubles that set `output_text` directly OR walk the underlying
+    `output[*].content[*].text` tree the same way the SDK does.
     """
-    choices = getattr(response, "choices", None)
-    if not choices:
-        return ""
-    first = choices[0]
-    message = getattr(first, "message", None)
-    if message is None:
-        return ""
-    content = getattr(message, "content", None)
-    if isinstance(content, str):
-        return content
-    return ""
+    direct = getattr(response, "output_text", None)
+    if isinstance(direct, str) and direct:
+        return direct
+    output = getattr(response, "output", None) or []
+    parts: list[str] = []
+    for block in output:
+        content = getattr(block, "content", None) or []
+        for piece in content:
+            text = getattr(piece, "text", None)
+            if isinstance(text, str):
+                parts.append(text)
+    return "".join(parts)
