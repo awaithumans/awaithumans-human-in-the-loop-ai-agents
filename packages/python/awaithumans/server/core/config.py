@@ -99,7 +99,13 @@ class Settings(BaseSettings):
     # Used when building link-out URLs in Slack/email so humans can
     # click through to the dashboard. In production, this is the
     # HTTPS URL of the server (which also serves the dashboard).
-    PUBLIC_URL: str = "http://localhost:3001"
+    PUBLIC_URL: str = Field(
+        default="http://localhost:3001",
+        validation_alias=AliasChoices(
+            "AWAITHUMANS_PUBLIC_URL",
+            "PUBLIC_API_URL",
+        ),
+    )
 
     # ── Verification ─────────────────────────────────────────────────
     ANTHROPIC_API_KEY: str | None = None
