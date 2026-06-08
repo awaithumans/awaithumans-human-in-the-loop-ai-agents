@@ -312,9 +312,9 @@ async def test_caps_block_second_call(db_session: AsyncSession) -> None:
 
 @pytest.mark.asyncio
 async def test_propose_schema_returns_spec() -> None:
-    """The proposer parses the LLM JSON into a SchemaSpec. Azure call
-    is mocked at the chat.completions boundary so the test stays
-    hermetic."""
+    """The proposer parses the Azure Responses-API output into a
+    SchemaSpec. Azure is mocked at the ``responses.create`` boundary so
+    the test stays hermetic."""
     from types import SimpleNamespace
     from unittest.mock import AsyncMock
 
@@ -322,26 +322,22 @@ async def test_propose_schema_returns_spec() -> None:
         propose_schema_from_page,
     )
 
+    # The Responses API exposes ``response.output_text`` directly for
+    # text responses; the proposer's ``_extract_text`` prefers that
+    # accessor and falls back to walking ``output[*].content[*].text``.
     fake_response = SimpleNamespace(
-        choices=[
-            SimpleNamespace(
-                message=SimpleNamespace(
-                    content=(
-                        '{"name": "Invoice", "fields": ['
-                        '{"name": "vendor", "type": "str"},'
-                        '{"name": "total_cents", "type": "int"},'
-                        '{"name": "invoice_date", "type": "date"}'
-                        "]}"
-                    )
-                )
-            )
-        ]
+        output_text=(
+            '{"name": "Invoice", "fields": ['
+            '{"name": "vendor", "type": "str"},'
+            '{"name": "total_cents", "type": "int"},'
+            '{"name": "invoice_date", "type": "str"}'
+            "]}"
+        ),
+        output=[],
     )
     fake_client = SimpleNamespace(
-        chat=SimpleNamespace(
-            completions=SimpleNamespace(
-                create=AsyncMock(return_value=fake_response),
-            )
+        responses=SimpleNamespace(
+            create=AsyncMock(return_value=fake_response),
         )
     )
     with patch(
@@ -352,7 +348,7 @@ async def test_propose_schema_returns_spec() -> None:
 
     assert spec.name == "Invoice"
     assert [f.name for f in spec.fields] == ["vendor", "total_cents", "invoice_date"]
-    assert [f.type for f in spec.fields] == ["str", "int", "date"]
+    assert [f.type for f in spec.fields] == ["str", "int", "str"]
 
 
 # ─── Per-field submit ──────────────────────────────────────────────────

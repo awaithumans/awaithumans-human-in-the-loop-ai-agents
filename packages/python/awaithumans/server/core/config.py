@@ -237,6 +237,13 @@ class Settings(BaseSettings):
         "env_file": ".env",
         "env_file_encoding": "utf-8",
         "case_sensitive": False,
+        # Fields with ``validation_alias=AliasChoices(...)`` (RESEND_KEY,
+        # PUBLIC_URL, AWAITHUMANS_API_KEY, etc.) would otherwise refuse
+        # the Python field name as a kwarg, breaking test fixtures that
+        # build Settings via ``Settings(RESEND_KEY="re_xxx", ...)``.
+        # ``populate_by_name=True`` keeps the original name accepted
+        # alongside the env-var aliases.
+        "populate_by_name": True,
         # Two namespaces share the `AWAITHUMANS_` prefix: server-side
         # (this Settings class) and SDK-side (`AWAITHUMANS_URL`,
         # `AWAITHUMANS_ADMIN_API_TOKEN` when used purely as a client

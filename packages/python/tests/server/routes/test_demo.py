@@ -26,7 +26,10 @@ _RECEIPT_SPEC_JSON = json.dumps(
         "fields": [
             {"name": "vendor", "type": "str"},
             {"name": "total_cents", "type": "int"},
-            {"name": "date", "type": "date"},
+            # Dates land as `str` in the demo vocabulary; the proposer
+            # uses `str` for date-like fields so the LLM emits them in
+            # whatever format the source document uses.
+            {"name": "date", "type": "str"},
         ],
     }
 )
@@ -109,7 +112,10 @@ def test_propose_schema_happy(client: TestClient) -> None:
         fields=[
             SchemaFieldSpec(name="vendor", type="str"),
             SchemaFieldSpec(name="invoice_number", type="str"),
-            SchemaFieldSpec(name="invoice_date", type="date"),
+            # `date` is not in the v2 vocabulary; date-like values are
+            # proposed as `str` so the LLM emits them in the source
+            # document's format unchanged.
+            SchemaFieldSpec(name="invoice_date", type="str"),
             SchemaFieldSpec(name="total_cents", type="int"),
         ],
     )
@@ -145,7 +151,7 @@ def test_propose_schema_happy(client: TestClient) -> None:
     assert [f["type"] for f in body["fields"]] == [
         "str",
         "str",
-        "date",
+        "str",
         "int",
     ]
 
