@@ -193,7 +193,11 @@ class Settings(BaseSettings):
     DEMO_HOT_SLACK_MENTION: str = "<!channel>"
     DEMO_BOOKING_URL: str = "https://cal.com/awaithumans/15min"
     DEMO_PROVIDER: str = "openai-gpt-5"
-    DEMO_CONFIDENCE_THRESHOLD: float = 0.85
+    DEMO_CONFIDENCE_THRESHOLD: float = 0.95
+    # Demo guarantee: at least this fraction of fields routes to the
+    # reviewer even when the model is uniformly confident, so the
+    # visitor always sees the human-in-the-loop moment.
+    DEMO_MIN_FLAGGED_RATIO: float = 0.30
     DEMO_CLAIM_TIMEOUT_SECONDS: int = 300  # public lane only; hot lane never times out
     DEMO_DAILY_CAP: int = 50
     DEMO_PER_IP_CAP: int = 3

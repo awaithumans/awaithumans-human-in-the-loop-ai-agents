@@ -129,7 +129,28 @@ async def start_demo(
     )
 
     threshold = settings.DEMO_CONFIDENCE_THRESHOLD
-    pending = sorted(name for name, conf in extraction.confidences.items() if conf < threshold)
+    pending = sorted(
+        name for name, conf in extraction.confidences.items() if conf < threshold
+    )
+
+    # Demo floor: even when the LLM is uniformly confident, force the
+    # lowest-confidence fields into pending so the visitor always sees
+    # the human-review moment. Tunable via DEMO_MIN_FLAGGED_RATIO; a
+    # ratio of 0 disables the floor entirely.
+    total_fields = len(extraction.confidences)
+    ratio = settings.DEMO_MIN_FLAGGED_RATIO
+    if total_fields > 0 and ratio > 0:
+        target = max(1, int(round(total_fields * ratio)))
+        if len(pending) < target:
+            ranked = sorted(
+                (name for name in extraction.confidences if name not in pending),
+                key=lambda n: extraction.confidences[n],
+            )
+            for name in ranked:
+                if len(pending) >= target:
+                    break
+                pending.append(name)
+            pending = sorted(set(pending))
 
     record = DemoRecord(
         email=input_.email,

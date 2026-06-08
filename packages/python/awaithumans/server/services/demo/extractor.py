@@ -6,9 +6,16 @@ confidence map is what drives the hero moment: fields below
 DEMO_CONFIDENCE_THRESHOLD route to a human reviewer; high-confidence
 fields render immediately as confirmed.
 
-The visitor-facing label remains "AI extractor (GPT-5.5)" — the actual
+The visitor-facing label remains "AI extractor (GPT-5.5)", the actual
 provider deployment is internal. Errors are sanitized through
 DemoProviderError so the wizard never leaks Azure-specific details.
+
+Nested ``record`` and ``list[record]`` schemas (added in the
+schema_builder revision) render as Python-class-like blocks in the
+user prompt so the model sees the full structure rather than a flat
+``{"field": "type"}`` map. Confidence is still reported at the
+top-level field name only, so a flagged ``employees`` field covers
+the whole list rather than per-row dialogue.
 """
 
 from __future__ import annotations
@@ -16,6 +23,7 @@ from __future__ import annotations
 import base64
 import json
 import logging
+import typing
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
@@ -83,19 +91,65 @@ def _build_client() -> AsyncAzureOpenAI:
 
 
 def _build_user_prompt(response_model: type[BaseModel]) -> str:
-    field_descriptions: list[str] = []
-    for name, field in response_model.model_fields.items():
-        annotation = field.annotation
-        py_type = getattr(annotation, "__name__", None) or str(annotation)
-        field_descriptions.append(f'  "{name}": <{py_type}>')
-    schema_block = "{\n" + ",\n".join(field_descriptions) + "\n}"
-
+    schema_block = _render_model(response_model, indent=0)
     return (
         "Extract these fields from the page image and return JSON of the form "
         '{"data": {...}, "confidence": {...}}. The data object must match this '
         f"schema exactly:\n\n{schema_block}\n\n"
-        "The confidence object maps each field name to a 0.0-1.0 score."
+        "The confidence object maps each TOP-LEVEL field name to a 0.0-1.0 score. "
+        "For nested records and lists of records, score the whole field as a unit "
+        "rather than scoring each nested sub-field."
     )
+
+
+def _render_model(model: type[BaseModel], *, indent: int) -> str:
+    """Render a Pydantic model as a Python-class-like schema block.
+
+    Walks ``model.model_fields`` and emits one line per field. Nested
+    Pydantic models render as ``Name { ... }`` with their own fields
+    indented. ``list[SomeModel]`` renders as
+    ``list[record { ... }]``. Primitives render as their
+    ``__name__``.
+    """
+    pad = "  " * indent
+    inner_pad = "  " * (indent + 1)
+    lines = [f"{pad}{model.__name__} {{"]
+    for name, field in model.model_fields.items():
+        rendered = _render_annotation(field.annotation, indent=indent + 1)
+        lines.append(f"{inner_pad}{name}: {rendered}")
+    lines.append(f"{pad}}}")
+    return "\n".join(lines)
+
+
+def _render_annotation(annotation: Any, *, indent: int) -> str:
+    """Render a single field annotation as a human-readable type string.
+
+    Three cases:
+      1. BaseModel subclass: emit ``Name { ... }`` with nested fields
+         indented one level deeper.
+      2. ``list[SomeModel]``: emit ``list[record { ... }]`` so the LLM
+         sees the row shape inline.
+      3. Anything else: fall back to ``__name__`` or ``str(annotation)``
+         so primitives render as ``str``, ``int``, ``list[str]``, etc.
+    """
+    if isinstance(annotation, type) and issubclass(annotation, BaseModel):
+        return _render_model(annotation, indent=indent).lstrip()
+
+    origin = typing.get_origin(annotation)
+    if origin is list:
+        (inner,) = typing.get_args(annotation) or (None,)
+        if isinstance(inner, type) and issubclass(inner, BaseModel):
+            nested = _render_model(inner, indent=indent).lstrip()
+            # Strip the leading "Name " so the reader sees
+            # ``list[record { ... }]`` rather than ``list[Foo { ... }]``;
+            # the row's own class name is unhelpful noise here.
+            body = nested[nested.index("{") :]
+            return f"list[record {body}]"
+
+    name = getattr(annotation, "__name__", None)
+    if isinstance(name, str) and name:
+        return name
+    return str(annotation)
 
 
 async def run_demo_extraction(

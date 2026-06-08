@@ -152,7 +152,17 @@ async def test_auto_proposes_when_schema_omitted(db_session: AsyncSession) -> No
 
 
 @pytest.mark.asyncio
-async def test_hot_demo_flag_persisted(db_session: AsyncSession) -> None:
+async def test_hot_demo_flag_persisted(
+    db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Disable the demo floor so this test exercises the
+    # threshold-only path. With the floor enabled (default 30%) the
+    # is_hot_demo flag is what we're asserting on, not the flagged
+    # count, so the simpler assertion is to confirm the hot flag
+    # persists when all confidences are clean.
+    from awaithumans.server.core.config import settings as _settings
+
+    monkeypatch.setattr(_settings, "DEMO_MIN_FLAGGED_RATIO", 0.0)
     with (
         patch(
             "awaithumans.server.services.demo.service.verify_turnstile_token",
@@ -162,7 +172,7 @@ async def test_hot_demo_flag_persisted(db_session: AsyncSession) -> None:
     ):
         mock_run.return_value = ExtractionResult(
             values={"vendor": "Acme", "total_cents": 1299, "date": "2026-01-01"},
-            confidences={"vendor": 0.97, "total_cents": 0.92, "date": 0.95},
+            confidences={"vendor": 0.99, "total_cents": 0.97, "date": 0.98},
             cost_cents=6,
         )
         await start_demo(db_session, input_=_input(is_hot_demo=True))
@@ -172,6 +182,65 @@ async def test_hot_demo_flag_persisted(db_session: AsyncSession) -> None:
     record = (await db_session.execute(select(DemoRecord))).scalars().one()
     assert record.is_hot_demo is True
     assert record.pending_field_names == []  # all above threshold
+
+
+@pytest.mark.asyncio
+async def test_demo_floor_forces_min_flagged_ratio(
+    db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Even when the LLM is uniformly confident, the demo floor forces
+    the lowest-confidence fields into pending so the visitor always
+    sees the human-review moment.
+
+    Floor is configurable; this test sets it to 50% with a 4-field
+    schema and asserts that the two lowest-confidence fields land in
+    pending despite every value being above the threshold.
+    """
+    from awaithumans.server.core.config import settings as _settings
+
+    monkeypatch.setattr(_settings, "DEMO_MIN_FLAGGED_RATIO", 0.5)
+
+    four_field_spec = {
+        "name": "Receipt",
+        "fields": [
+            {"name": "vendor", "type": "str"},
+            {"name": "total_cents", "type": "int"},
+            {"name": "date", "type": "date"},
+            {"name": "tax_cents", "type": "int"},
+        ],
+    }
+    with (
+        patch(
+            "awaithumans.server.services.demo.service.verify_turnstile_token",
+            return_value=None,
+        ),
+        patch("awaithumans.server.services.demo.service.run_demo_extraction") as mock_run,
+    ):
+        mock_run.return_value = ExtractionResult(
+            values={
+                "vendor": "Acme",
+                "total_cents": 1299,
+                "date": "2026-01-01",
+                "tax_cents": 100,
+            },
+            confidences={
+                "vendor": 0.99,
+                "total_cents": 0.98,
+                "date": 0.99,
+                "tax_cents": 0.97,
+            },
+            cost_cents=6,
+        )
+        output = await start_demo(
+            db_session,
+            input_=_input(schema_spec=four_field_spec),
+        )
+
+    # 50% of 4 = 2 fields must be pending. The two lowest-confidence
+    # fields (tax_cents at 0.97, then total_cents at 0.98) get
+    # promoted into the pending set.
+    assert len(output.pending_field_names) == 2
+    assert set(output.pending_field_names) == {"tax_cents", "total_cents"}
 
 
 @pytest.mark.asyncio

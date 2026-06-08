@@ -1,10 +1,15 @@
 """LLM-driven schema proposer for the AwaitVerify landing demo.
 
-Takes a single page PNG and asks Azure OpenAI to propose a small
-Pydantic schema (3..7 fields) appropriate for the document on the page.
+Takes a single page PNG and asks Azure OpenAI to propose a Pydantic
+schema describing the most valuable structured data on the page.
 Uses the same vision pattern as `extractor.py` but with a separate,
 faster deployment name (`AZURE_OPENAI_SCHEMA_DEPLOYMENT`), falling
 back to the main deployment when unset.
+
+The schema can include nested ``record`` and ``list[record]`` fields
+so document structures like address blocks and line-item tables get
+captured as first-class typed structures rather than flattened into
+opaque strings.
 
 The schema proposal is intentionally a separate call from extraction:
 the visitor sees a "Reading your document..." step, then an editable
@@ -38,34 +43,50 @@ logger = logging.getLogger("awaithumans.server.services.demo.schema_proposer")
 _MAX_TOKENS = 800
 _PROVIDER_LABEL = "Schema proposer"
 
-_SUPPORTED_TYPES = ("str", "int", "float", "bool", "date", "list[str]")
+_SUPPORTED_PRIMITIVE_TYPES = ("str", "int", "float", "bool", "date", "list[str]")
+_SUPPORTED_NESTED_TYPES = ("record", "list[record]")
+_SUPPORTED_TYPES = _SUPPORTED_PRIMITIVE_TYPES + _SUPPORTED_NESTED_TYPES
 
 _SYSTEM_PROMPT = (
     "You are an expert document analyst. Given an image of a single "
-    "page from a document, propose a small Pydantic schema describing "
-    "the structured fields a human would want to extract from that page. "
-    "Rules: "
-    "(1) Propose between 3 and 7 fields, no more, no less. "
-    "(2) Each field name must be valid snake_case (lowercase, digits, "
-    "and underscores only; starting with a letter). "
-    "(3) Each field type must be one of: str, int, float, bool, date, "
-    "list[str]. No other types. Use 'int' for monetary cents-style "
-    "integers, 'date' for ISO dates, 'list[str]' for short tag lists. "
-    "(4) The schema name must be a CamelCase Python identifier "
-    "describing the document (e.g. Invoice, Receipt, GovernmentID, "
-    "PurchaseOrder). "
-    "(5) Return ONLY a JSON object. No prose, no markdown, no code "
-    "fences. The object must match this exact shape: "
-    '{"name": "<CamelCase>", "fields": [{"name": "<snake_case>", '
-    '"type": "<one of the supported types>"}, ...]}. '
-    "Pick the most useful fields for the document, not every possible "
-    "field. Quality over quantity."
+    "page from a document, propose a Pydantic schema describing the "
+    "most valuable structured data on the page. Extract as many "
+    "fields as the data warrants, no fewer, no more.\n\n"
+    "Rules:\n"
+    "1. Each field name must be valid snake_case (lowercase letters, "
+    "digits, underscores; must start with a letter).\n"
+    "2. Each field type must be one of: str, int, float, bool, date, "
+    "list[str], record, list[record].\n"
+    "3. The schema name must be a CamelCase Python identifier "
+    "describing the document.\n"
+    "4. Use `record` for a nested object with its own named fields "
+    "(e.g. an address block, a totals summary).\n"
+    "5. Use `list[record]` for repeating row structures (e.g. tables "
+    "of line items, employee rows, transaction logs). The repeated "
+    "row's columns become the nested fields.\n"
+    "6. For `record` and `list[record]`, include a `fields` array "
+    "describing the nested fields. Nested fields follow the same "
+    "rules (snake_case, supported types). Nested records can "
+    "themselves contain `record` or `list[record]`.\n"
+    "7. Pick the fields that carry the most useful information on "
+    "the page. If the page is dominated by a table, the table should "
+    "be the dominant field.\n\n"
+    "Return ONLY a JSON object. No prose, no markdown, no code "
+    "fences. The object matches this shape:\n\n"
+    "{\n"
+    '  "name": "<CamelCase>",\n'
+    '  "fields": [\n'
+    '    {"name": "<snake_case>", "type": "<supported>"},\n'
+    '    {"name": "<snake_case>", "type": "record", "fields": [...]},\n'
+    '    {"name": "<snake_case>", "type": "list[record]", "fields": [...]}\n'
+    "  ]\n"
+    "}"
 )
 
 
 _USER_PROMPT = (
     "Look at the page image and propose a Pydantic schema describing "
-    "the most useful structured fields on that page. "
+    "the most useful structured data on that page. "
     "Return ONLY a JSON object. No prose, no markdown, no code fences."
 )
 
@@ -172,12 +193,24 @@ def _normalize_in_place(parsed: dict[str, Any]) -> None:
     """Best-effort normalisation of the raw LLM JSON before validation.
 
     Drops fields with unsupported types so a single bad guess from the
-    model doesn't tank the whole proposal. The schema_builder's strict
-    validator handles the rest (identifier-shape, dupes, count caps).
+    model doesn't tank the whole proposal. Recurses through nested
+    ``record`` and ``list[record]`` fields so the same allowlist
+    applies at every level. The schema_builder's strict validator
+    handles identifier shape, duplicate names, and other structural
+    problems after this best-effort cleanup.
     """
-    fields = parsed.get("fields")
+    parsed["fields"] = _normalize_field_list(parsed.get("fields"))
+
+
+def _normalize_field_list(fields: Any) -> list[dict[str, Any]]:
+    """Filter one level of fields, recursing into nested ``fields``.
+
+    Drops any entry whose type isn't in the supported allowlist.
+    Nested ``record`` / ``list[record]`` fields recurse so the
+    rejection rule applies at every depth.
+    """
     if not isinstance(fields, list):
-        return
+        return []
     cleaned: list[dict[str, Any]] = []
     for raw in fields:
         if not isinstance(raw, dict):
@@ -188,8 +221,11 @@ def _normalize_in_place(parsed: dict[str, Any]) -> None:
             continue
         if type_ not in _SUPPORTED_TYPES:
             continue
-        cleaned.append({"name": name, "type": type_})
-    parsed["fields"] = cleaned
+        entry: dict[str, Any] = {"name": name, "type": type_}
+        if type_ in _SUPPORTED_NESTED_TYPES:
+            entry["fields"] = _normalize_field_list(raw.get("fields"))
+        cleaned.append(entry)
+    return cleaned
 
 
 def _extract_text(response: Any) -> str:
