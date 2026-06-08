@@ -94,22 +94,56 @@ def _final_result(record: DemoRecord) -> dict[str, Any]:
     return merged
 
 
+def _count_leaf_diffs(ai_value: Any, corrected_value: Any) -> int:
+    """Count leaf-level differences between AI value and reviewer value.
+
+    Recursively walks both sides. For primitives, returns 1 if they
+    differ, else 0. For dicts, sums per-key diffs (union of keys). For
+    lists, pairs items by index and sums. When the shape itself
+    differs (dict vs list, or differing lengths), missing slots count
+    as differences against their counterpart.
+
+    This is what the user thinks of as "corrections" — every leaf the
+    reviewer changed, no matter how deeply nested.
+    """
+    if ai_value == corrected_value:
+        return 0
+    # Dict on both sides: walk the union of keys.
+    if isinstance(ai_value, dict) and isinstance(corrected_value, dict):
+        total = 0
+        for key in set(ai_value) | set(corrected_value):
+            total += _count_leaf_diffs(ai_value.get(key), corrected_value.get(key))
+        return total
+    # List on both sides: pair by index.
+    if isinstance(ai_value, list) and isinstance(corrected_value, list):
+        total = 0
+        max_len = max(len(ai_value), len(corrected_value))
+        for i in range(max_len):
+            ai_item = ai_value[i] if i < len(ai_value) else None
+            corrected_item = corrected_value[i] if i < len(corrected_value) else None
+            total += _count_leaf_diffs(ai_item, corrected_item)
+        return total
+    # Shape mismatch or both primitive: one diff.
+    return 1
+
+
 def _count_top_level_diffs(
     ai_result: dict[str, Any] | None,
     field_corrections: dict[str, Any] | None,
 ) -> int:
-    """Count top-level keys where the reviewer's correction differs from AI.
+    """Count every leaf-level difference between AI and reviewer values.
 
-    Uses deep equality (Python ``==`` already does this for dict/list of
-    primitives). Only counts keys present in ``field_corrections`` since
-    those are the fields the reviewer touched.
+    Despite the name, this is now leaf-level. Kept the name to avoid
+    rippling renames into the email template's context key. Walks each
+    field the reviewer touched and recurses into nested structures so
+    a single reviewer correction inside an employees[3].rfc_curp
+    counts as one, not as "the whole employees list changed".
     """
     ai = ai_result or {}
     corrections = field_corrections or {}
     count = 0
     for key, corrected_value in corrections.items():
-        if ai.get(key) != corrected_value:
-            count += 1
+        count += _count_leaf_diffs(ai.get(key), corrected_value)
     return count
 
 
