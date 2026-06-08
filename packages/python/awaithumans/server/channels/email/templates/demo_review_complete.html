@@ -4,20 +4,27 @@
   <meta charset="utf-8" />
   <title>Your AwaitVerify demo receipt</title>
 </head>
-<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.5; max-width: 560px; margin: 0 auto; padding: 24px; color: #0A0A0A; background: #F5F5F5;">
-  <h1 style="font-size: 22px; margin: 0 0 16px;">Your verified extraction.</h1>
-  <p>This is the receipt for the AwaitVerify demo you ran. The same result is already on screen for you. Keep this for your records.</p>
+<!--
+  Notes on <details>/<summary>:
+  - Apple Mail, Gmail web, Spark, and most modern clients render this natively.
+  - Outlook desktop does NOT, and falls back to showing everything as flat
+    text (the summary line plus all children). That is acceptable for v1.
+  - All styling is inline because email clients still don't render external
+    CSS reliably.
+-->
+<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.5; max-width: 640px; margin: 0 auto; padding: 24px; color: #0A0A0A; background: #F5F5F5;">
+  <h1 style="font-size: 22px; margin: 0 0 12px;">Your verified extraction.</h1>
+  <p style="margin: 0 0 8px;">A reviewer caught <strong>$correction_count $correction_word</strong> in your extraction.</p>
+  <p style="margin: 0 0 20px; font-size: 14px; color: #555;">
+    AI values are shown in <span style="color:#ef4444;text-decoration:line-through;">red</span>.
+    Reviewer-verified values are shown in <span style="color:#22c55e;font-weight:600;">green</span>.
+  </p>
 
-  <h2 style="font-size: 16px; margin: 24px 0 8px;">AI extraction (initial)</h2>
-  <pre style="background:#0A0A0A;color:#F5F5F5;padding:12px;border-radius:6px;overflow-x:auto;font-size:13px;">$ai_result_pretty</pre>
+  <div style="background:#ffffff;border:1px solid #ddd;border-radius:8px;padding:16px;margin:0 0 24px;">
+    $diff_tree_html
+  </div>
 
-  <h2 style="font-size: 16px; margin: 24px 0 8px;">Reviewer corrections</h2>
-  <pre style="background:#0A0A0A;color:#F5F5F5;padding:12px;border-radius:6px;overflow-x:auto;font-size:13px;">$corrections_pretty</pre>
-
-  <h2 style="font-size: 16px; margin: 24px 0 8px;">Final typed result</h2>
-  <pre style="background:#0A0A0A;color:#F5F5F5;padding:12px;border-radius:6px;overflow-x:auto;font-size:13px;">$final_pretty</pre>
-
-  <p style="margin-top: 24px;">In production, this lives inside one call. Your agent calls verify_document(), a real reviewer catches what the model got wrong, and your code resumes with the typed instance.</p>
+  <p style="margin-top: 16px;">In production, this lives inside one call. Your agent calls verify_document(), a real reviewer catches what the model got wrong, and your code resumes with the typed instance.</p>
 
   <p style="margin-top: 24px;">
     <a href="$signup_url" style="display:inline-block;background:#00E676;color:#0A0A0A;padding:12px 20px;border-radius:6px;text-decoration:none;font-weight:600;">Sign up. First $$5 is on us.</a>

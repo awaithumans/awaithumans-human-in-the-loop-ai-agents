@@ -86,12 +86,232 @@ def _final_result(record: DemoRecord) -> dict[str, Any]:
     """Merge AI result with reviewer corrections.
 
     The reviewer's per-field corrections win over the AI's initial
-    extraction — same merge order the visitor saw on screen during
+    extraction. Same merge order the visitor saw on screen during
     the live result phase.
     """
     merged: dict[str, Any] = dict(record.ai_result or {})
     merged.update(record.field_corrections or {})
     return merged
+
+
+def _count_top_level_diffs(
+    ai_result: dict[str, Any] | None,
+    field_corrections: dict[str, Any] | None,
+) -> int:
+    """Count top-level keys where the reviewer's correction differs from AI.
+
+    Uses deep equality (Python ``==`` already does this for dict/list of
+    primitives). Only counts keys present in ``field_corrections`` since
+    those are the fields the reviewer touched.
+    """
+    ai = ai_result or {}
+    corrections = field_corrections or {}
+    count = 0
+    for key, corrected_value in corrections.items():
+        if ai.get(key) != corrected_value:
+            count += 1
+    return count
+
+
+def _fmt_primitive(value: Any) -> str:
+    """Format a primitive (or None) for HTML display, HTML-escaped."""
+    if value is None or value == "":
+        return html.escape("(empty)", quote=False)
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if isinstance(value, (int, float, str)):
+        return html.escape(str(value), quote=False)
+    # Fallback for anything unexpected.
+    return html.escape(json.dumps(value), quote=False)
+
+
+def _is_primitive(value: Any) -> bool:
+    return value is None or isinstance(value, (str, int, float, bool))
+
+
+def _summary_label(value: Any) -> str:
+    """One-line summary used inside <summary> for a complex value."""
+    if isinstance(value, list):
+        n = len(value)
+        return f"[{n} item{'s' if n != 1 else ''}]"
+    if isinstance(value, dict):
+        n = len(value)
+        return f"{{{n} field{'s' if n != 1 else ''}}}"
+    return ""
+
+
+# Inline CSS constants used by the tree renderer. Email clients still don't
+# render external stylesheets reliably, so we inline everything.
+_ROW_STYLE = (
+    "margin:2px 0;padding:2px 0;font-family:ui-monospace,SFMono-Regular,"
+    "Menlo,Monaco,Consolas,monospace;font-size:13px;line-height:1.55;"
+)
+_KEY_STYLE = "color:#555;margin-right:6px;"
+_VALUE_STYLE = "color:#0A0A0A;"
+_AI_OLD_STYLE = "color:#ef4444;text-decoration:line-through;margin-right:8px;"
+_NEW_STYLE = "color:#22c55e;font-weight:600;"
+_SUMMARY_STYLE = (
+    "cursor:pointer;color:#555;font-family:ui-monospace,SFMono-Regular,"
+    "Menlo,Monaco,Consolas,monospace;font-size:13px;padding:2px 0;"
+)
+_DETAILS_STYLE = (
+    "margin:2px 0 2px 0;padding-left:12px;border-left:1px solid #ddd;"
+)
+
+
+def _render_tree_html(
+    value: Any,
+    prior: Any,
+    depth: int,
+    list_index: int | None,
+    label: str | None,
+) -> str:
+    """Render a value (with optional AI prior) as a nested <details> tree.
+
+    Default-open rules:
+    - Records: open for the first two depth levels (depth < 2).
+    - Lists: only [0] is open by default. Index 1+ stays closed.
+
+    Note: <details>/<summary> is supported by Apple Mail, Gmail web,
+    Spark, and most modern clients. Outlook desktop ignores the tag and
+    falls back to showing everything as flat text. That is acceptable
+    for v1.
+    """
+    # Primitive leaf: render row with optional diff (AI value on the left
+    # struck-through, reviewer value on the right).
+    if _is_primitive(value) and _is_primitive(prior):
+        if prior is not None and prior != value and prior != "":
+            return (
+                f'<div style="{_ROW_STYLE}">'
+                f'<span style="{_KEY_STYLE}">'
+                f"{html.escape(label or '', quote=False)}{':' if label else ''}"
+                f"</span>"
+                f'<span style="{_AI_OLD_STYLE}">{_fmt_primitive(prior)}</span>'
+                f'<span style="{_NEW_STYLE}">{_fmt_primitive(value)}</span>'
+                f"</div>"
+            )
+        return (
+            f'<div style="{_ROW_STYLE}">'
+            f'<span style="{_KEY_STYLE}">'
+            f"{html.escape(label or '', quote=False)}{':' if label else ''}"
+            f"</span>"
+            f'<span style="{_VALUE_STYLE}">{_fmt_primitive(value)}</span>'
+            f"</div>"
+        )
+
+    # Complex (list or dict). Render as <details>.
+    if isinstance(value, list):
+        # Lists: index 0 open, rest closed.
+        is_open = list_index is None or list_index == 0
+        summary_text = (
+            f"{html.escape(label, quote=False)} {_summary_label(value)}"
+            if label
+            else f"[{list_index}] {_summary_label(value)}"
+            if list_index is not None
+            else _summary_label(value)
+        )
+        # When label is None and list_index is None we are at the root.
+        open_attr = " open" if is_open else ""
+        children_html: list[str] = []
+        prior_list = prior if isinstance(prior, list) else []
+        for i, item in enumerate(value):
+            prior_item = prior_list[i] if i < len(prior_list) else None
+            children_html.append(
+                _render_tree_html(item, prior_item, depth + 1, i, None)
+            )
+        return (
+            f'<details{open_attr} style="{_DETAILS_STYLE}">'
+            f'<summary style="{_SUMMARY_STYLE}">{summary_text}</summary>'
+            f"{''.join(children_html)}"
+            "</details>"
+        )
+
+    if isinstance(value, dict):
+        # Records: open while depth < 2.
+        is_open = depth < 2
+        summary_text = (
+            f"{html.escape(label, quote=False)} {_summary_label(value)}"
+            if label
+            else f"[{list_index}]"
+            if list_index is not None
+            else _summary_label(value)
+        )
+        open_attr = " open" if is_open else ""
+        children_html = []
+        prior_dict = prior if isinstance(prior, dict) else {}
+        for key, child in value.items():
+            child_prior = prior_dict.get(key)
+            children_html.append(
+                _render_tree_html(child, child_prior, depth + 1, None, key)
+            )
+        return (
+            f'<details{open_attr} style="{_DETAILS_STYLE}">'
+            f'<summary style="{_SUMMARY_STYLE}">{summary_text}</summary>'
+            f"{''.join(children_html)}"
+            "</details>"
+        )
+
+    # Mixed primitive/complex (e.g. value is dict but prior was a string).
+    # Render the new value as a tree without diffing against the unrelated
+    # prior, and surface the prior as a struck-through note above.
+    body = _render_tree_html(value, None, depth, list_index, label)
+    if prior is not None and prior != "" and _is_primitive(prior):
+        note = (
+            f'<div style="{_ROW_STYLE}">'
+            f'<span style="{_AI_OLD_STYLE}">{_fmt_primitive(prior)}</span>'
+            "</div>"
+        )
+        return note + body
+    return body
+
+
+def _render_diff_tree(
+    ai_result: dict[str, Any] | None,
+    final_result: dict[str, Any],
+) -> str:
+    """Render the top-level diff tree HTML string.
+
+    The top-level container is a div (no <details> wrap) so the user
+    always sees the full record without needing to click. Nested records
+    follow the depth < 2 rule; nested lists follow the index == 0 rule.
+    """
+    parts: list[str] = []
+    ai = ai_result or {}
+    for key, value in final_result.items():
+        prior = ai.get(key)
+        parts.append(_render_tree_html(value, prior, 0, None, key))
+    return "".join(parts)
+
+
+def _render_text_summary(
+    ai_result: dict[str, Any] | None,
+    final_result: dict[str, Any],
+) -> str:
+    """Plain-text fallback for the receipt email.
+
+    Flat ``key: value`` listing. For changed fields, append the prior AI
+    value with a ``(was: X)`` trailer so reviewers using a text-only
+    client still see the diff.
+    """
+    ai = ai_result or {}
+    lines: list[str] = []
+    for key, value in final_result.items():
+        if isinstance(value, (dict, list)):
+            rendered = json.dumps(value, indent=2)
+            prior = ai.get(key)
+            if prior is not None and prior != value:
+                lines.append(
+                    f"{key}: {rendered}\n  (was: {json.dumps(prior)})"
+                )
+            else:
+                lines.append(f"{key}: {rendered}")
+            continue
+        prior = ai.get(key)
+        if prior is not None and prior != value and prior != "":
+            lines.append(f"{key}: {value}  (was: {prior})")
+        else:
+            lines.append(f"{key}: {value}")
+    return "\n".join(lines)
 
 
 def _build_message(
@@ -138,18 +358,25 @@ async def send_demo_review_complete_email(record: DemoRecord) -> None:
         )
         return
 
+    final = _final_result(record)
+    correction_count = _count_top_level_diffs(
+        record.ai_result, record.field_corrections
+    )
+    diff_tree_html = _render_diff_tree(record.ai_result, final)
+    text_summary = _render_text_summary(record.ai_result, final)
+
     html_ctx = {
-        "ai_result_pretty": _pretty_html(record.ai_result),
-        "corrections_pretty": _pretty_html(record.field_corrections),
-        "final_pretty": _pretty_html(_final_result(record)),
+        "correction_count": str(correction_count),
+        "correction_word": "correction" if correction_count == 1 else "corrections",
+        "diff_tree_html": diff_tree_html,
         "signup_url": _safe_url(_signup_url()),
         "booking_url": _safe_url(settings.DEMO_BOOKING_URL),
         "demo_url": _safe_url(_demo_url()),
     }
     text_ctx = {
-        "ai_result_pretty": _pretty(record.ai_result),
-        "corrections_pretty": _pretty(record.field_corrections),
-        "final_pretty": _pretty(_final_result(record)),
+        "correction_count": str(correction_count),
+        "correction_word": "correction" if correction_count == 1 else "corrections",
+        "result_summary": text_summary,
         "signup_url": _signup_url(),
         "booking_url": settings.DEMO_BOOKING_URL,
         "demo_url": _demo_url(),

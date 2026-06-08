@@ -1,13 +1,8 @@
-Your AwaitVerify demo result. This is the receipt for the demo you ran.
+Your AwaitVerify demo result. A reviewer caught $correction_count $correction_word in your extraction.
 
-AI extraction (initial):
-$ai_result_pretty
+Changed fields show the AI's prior value with a "(was: X)" trailer.
 
-Reviewer corrections:
-$corrections_pretty
-
-Final typed result:
-$final_pretty
+$result_summary
 
 Sign up and the first $$5 is on us: $signup_url
 
