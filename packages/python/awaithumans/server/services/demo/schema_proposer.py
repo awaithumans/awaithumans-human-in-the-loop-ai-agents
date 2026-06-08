@@ -40,7 +40,11 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger("awaithumans.server.services.demo.schema_proposer")
 
-_MAX_TOKENS = 800
+# Nested ``list[record]`` schemas (a table with 10+ columns and 5+
+# top-level fields surrounding it) easily eat 1500+ output tokens.
+# 4000 leaves headroom for the largest single-page document we
+# realistically see while still bounding cost.
+_MAX_TOKENS = 4000
 _PROVIDER_LABEL = "Schema proposer"
 
 _SUPPORTED_PRIMITIVE_TYPES = ("str", "int", "float", "bool", "date", "list[str]")

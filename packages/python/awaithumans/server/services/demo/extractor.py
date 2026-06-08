@@ -37,7 +37,10 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger("awaithumans.server.services.demo.extractor")
 
-_MAX_TOKENS = 2000
+# Extraction of a table with 50+ rows on a page can produce 4000-6000
+# tokens of JSON. Generous ceiling so a single dense page doesn't
+# truncate mid-row and trip the JSON parser.
+_MAX_TOKENS = 8000
 _COST_PER_CALL_CENTS = 6
 _PROVIDER_LABEL = "AI extractor (Azure OpenAI)"
 
