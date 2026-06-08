@@ -9,8 +9,6 @@ For TaskStatus enum, import from awaithumans.types.
 
 from awaithumans.server.db.models.audit import AuditEntry
 from awaithumans.server.db.models.consumed_email_token import ConsumedEmailToken
-from awaithumans.server.db.models.demo_record import DemoRecord
-from awaithumans.server.db.models.demo_status import DemoStatus
 from awaithumans.server.db.models.email_sender_identity import EmailSenderIdentity
 from awaithumans.server.db.models.service_api_key import ServiceAPIKey
 from awaithumans.server.db.models.slack_installation import SlackInstallation
@@ -26,8 +24,6 @@ from awaithumans.types import TaskStatus
 __all__ = [
     "AuditEntry",
     "ConsumedEmailToken",
-    "DemoRecord",
-    "DemoStatus",
     "EmailSenderIdentity",
     "ServiceAPIKey",
     "SlackInstallation",

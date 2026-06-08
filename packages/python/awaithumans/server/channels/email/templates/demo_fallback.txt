@@ -1,7 +1,0 @@
-Our reviewer pool was backed up. Here's the AI-only extraction for the demo you ran:
-
-$ai_result_pretty
-
-Sign up and try the real thing. First $$5 is on us: $signup_url
-
-awaithumans

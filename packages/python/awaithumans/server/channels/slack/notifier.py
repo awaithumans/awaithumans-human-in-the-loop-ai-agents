@@ -19,7 +19,6 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, Any
 
-from awaithumans.awaitverify.types import Priority
 from awaithumans.forms import FormDefinition, unsupported_fields
 from awaithumans.server.channels.routing import ChannelRoute, routes_for_channel
 from awaithumans.server.channels.slack.blocks import open_review_message_blocks
@@ -36,7 +35,6 @@ from awaithumans.server.channels.slack.message_log import (
     record_posted_message,
 )
 from awaithumans.server.channels.slack.resolution import resolve_slack_target
-from awaithumans.server.core.config import settings
 from awaithumans.server.db.connection import get_async_session_factory
 from awaithumans.server.services.notification_audit import (
     record_notification_failure,
@@ -68,6 +66,7 @@ async def notify_task(
 
     form = _parse_form(form_definition)
     offenders = unsupported_fields(form, "slack") if form is not None else None
+    fallback_text = f"New task: {task_title}"
 
     factory = get_async_session_factory()
     async with factory() as session:
@@ -80,15 +79,6 @@ async def notify_task(
         except Exception as exc:  # noqa: BLE001
             logger.warning("notify_task: task %s missing: %s", task_id, exc)
             return
-
-        # AwaitVerify demo tasks get a visible tag so reviewers can spot
-        # them in their queue at a glance. `demo` is the public landing
-        # lane, `demo_hot` is the warm-prospect hot lane (founder pings).
-        # The hot-lane CHANNEL routing (separate Slack channel id) is a
-        # separate concern; this is just the message-text marker.
-        prefix = _demo_prefix(task.assign_to)
-        prefixed_title = f"{prefix}{task_title}"
-        fallback_text = f"New task: {prefixed_title}"
 
         # Sign the URL for the resolved assignee when we have one.
         # Slack-only users (no email/password) have no other way through
@@ -106,27 +96,17 @@ async def notify_task(
 
         task_status = task.status.value if hasattr(task.status, "value") else str(task.status)
 
-        # Hot-lane override: AwaitVerify warm-prospect demos (priority
-        # `demo_hot`) MUST land in the founder's dedicated Slack channel
-        # regardless of what the task-level `notify=` list says. The
-        # public demo lane (`demo`) keeps the existing default behavior
-        # so unrelated channel routing isn't affected. If the operator
-        # hasn't configured DEMO_HOT_SLACK_CHANNEL_ID, fall through and
-        # honor the per-route target as usual — no failure.
-        hot_lane_channel = _hot_lane_channel_override(task.assign_to)
-
         for route in routes:
-            effective_target = hot_lane_channel or route.target
             # Broadcast: route target starts with `#` → posting to a
             # channel where anyone could pick it up. Swap the "Open in
             # Slack" button for "Claim this task" — first clicker wins.
             # DM targets (`@user` / `U123456`) stay on the direct-open
             # flow since the recipient is already implied.
-            broadcast = _is_channel_target(effective_target)
+            broadcast = _is_channel_target(route.target)
 
             blocks = open_review_message_blocks(
                 task_id=task_id,
-                task_title=prefixed_title,
+                task_title=task_title,
                 review_url=review_url,
                 open_button_action_id=SLACK_ACTION_OPEN_REVIEW,
                 unsupported_fields=offenders if offenders else None,
@@ -163,21 +143,21 @@ async def notify_task(
             # resolution itself — sending to `@alice` silently fails.
             target = await resolve_slack_target(
                 client=client,
-                target=effective_target,
+                target=route.target,
                 team_id=route.identity,
             )
             if target is None:
                 logger.warning(
                     "Slack route %s → could not resolve to a user/channel; "
                     "skipping. Check the handle exists in this workspace.",
-                    effective_target,
+                    route.target,
                 )
                 await record_notification_failure(
                     session,
                     task_id=task_id,
                     task_status=task_status,
                     channel="slack",
-                    recipient=effective_target,
+                    recipient=route.target,
                     reason="target_not_found",
                     message=(
                         "Could not resolve this handle to a Slack user or "
@@ -193,12 +173,11 @@ async def notify_task(
                     blocks=blocks,
                 )
                 logger.info(
-                    "Slack notification sent for task %s → %s%s%s%s",
+                    "Slack notification sent for task %s → %s%s%s",
                     task_id,
-                    effective_target,
+                    route.target,
                     f" (team={route.identity})" if route.identity else "",
                     " [broadcast]" if broadcast else "",
-                    " [hot-lane]" if hot_lane_channel else "",
                 )
                 # Persist (channel, ts) so the post-completion updater
                 # can rewrite the message to "Completed by X" later.
@@ -215,7 +194,7 @@ async def notify_task(
                 logger.error(
                     "Slack notification failed for task %s → %s: %s",
                     task_id,
-                    effective_target,
+                    route.target,
                     exc,
                 )
                 await record_notification_failure(
@@ -223,62 +202,12 @@ async def notify_task(
                     task_id=task_id,
                     task_status=task_status,
                     channel="slack",
-                    recipient=effective_target,
+                    recipient=route.target,
                     reason="post_message_error",
                     message=f"Slack API returned an error: {exc}",
                 )
 
         await session.commit()
-
-
-def _demo_prefix(assign_to: dict[str, Any] | None) -> str:
-    """Return a `[DEMO] ` / `[DEMO·HOT] ` prefix for AwaitVerify demo tasks.
-
-    Returns an empty string for any task that is not an AwaitVerify demo,
-    so non-demo callers are completely unaffected. The middle-dot (·,
-    U+00B7) in `[DEMO·HOT]` is intentional — visually distinct from
-    `[DEMO]` at a glance and Unicode-safe in Slack.
-
-    Hot-lane demos additionally get a Slack mention (e.g. `<!channel>` or
-    `<@U123ABC>`) prepended BEFORE the `[DEMO·HOT]` tag. Slack's parser
-    only treats mention syntax as a real ping when it leads the message,
-    so the order is: mention, then tag, then task title. When
-    `DEMO_HOT_SLACK_MENTION` is unset/empty the mention is silently
-    omitted (graceful fallback, no exception).
-    """
-    if not assign_to or assign_to.get("managed") != "awaitverify":
-        return ""
-    priority = assign_to.get("priority")
-    if priority == Priority.DEMO_HOT.value:
-        mention = (settings.DEMO_HOT_SLACK_MENTION or "").strip()
-        if mention:
-            return f"{mention} [DEMO·HOT] "
-        return "[DEMO·HOT] "
-    if priority == Priority.DEMO.value:
-        return "[DEMO] "
-    return ""
-
-
-def _hot_lane_channel_override(assign_to: dict[str, Any] | None) -> str | None:
-    """Return the hot-lane Slack channel id when this task should be re-routed.
-
-    AwaitVerify warm-prospect demos (`priority=demo_hot`) get routed to a
-    dedicated founder channel via `settings.DEMO_HOT_SLACK_CHANNEL_ID`, so
-    pings never sit behind public demo noise in the shared reviewer queue.
-    Returns None for:
-      - Non-AwaitVerify tasks (the OSS path is unaffected)
-      - AwaitVerify `priority=demo` tasks (public lane keeps default routing)
-      - Any task when the operator hasn't configured the hot channel id
-        (graceful fallback to the per-route target, no failure)
-    """
-    if not assign_to or assign_to.get("managed") != "awaitverify":
-        return None
-    if assign_to.get("priority") != Priority.DEMO_HOT.value:
-        return None
-    channel_id = settings.DEMO_HOT_SLACK_CHANNEL_ID
-    if not channel_id:
-        return None
-    return channel_id
 
 
 def _is_channel_target(target: str) -> bool:
