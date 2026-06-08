@@ -185,8 +185,15 @@ class Settings(BaseSettings):
     TURNSTILE_SECRET: str | None = None
     DEMO_REVIEWER_EMAIL: str | None = None
     DEMO_HOT_SLACK_CHANNEL_ID: str | None = None
+    # Public-lane (priority=demo) Slack channel id. When set, public
+    # demo tasks attach `notify=["slack:<id>"]` so the standard Slack
+    # notifier fires for them. When unset, falls back to
+    # DEMO_HOT_SLACK_CHANNEL_ID so a single configured channel can
+    # serve both lanes; when neither is set, the demo notifier skips
+    # Slack entirely (graceful fallback, no exception).
+    DEMO_PUBLIC_SLACK_CHANNEL_ID: str | None = None
     # Slack mention prepended to hot-lane demo notifications. Default
-    # `<!channel>` pings everyone in the founder channel — impossible
+    # `<!channel>` pings everyone in the founder channel, impossible
     # to miss on phone/computer. Override with `<@U123ABC>` for a
     # direct ping or set to an empty string to suppress entirely
     # (graceful fallback, no exception).
