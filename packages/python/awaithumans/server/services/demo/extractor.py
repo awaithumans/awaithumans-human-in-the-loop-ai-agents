@@ -124,11 +124,25 @@ async def run_demo_extraction(
     # JSON Schema ``required`` array, so neither field can have a
     # default. The envelope also needs ``additionalProperties: false``,
     # which Pydantic emits when ``extra="forbid"`` is set on the model.
+    #
+    # Azure does NOT allow free-form ``dict[str, float]`` here because
+    # structured outputs needs every property named at schema time.
+    # We build a sibling confidence model whose fields exactly mirror
+    # the top-level fields of ``response_model``, then attach it.
+    confidence_fields: dict[str, tuple[Any, Any]] = {
+        name: (float, Field(...)) for name in response_model.model_fields
+    }
+    confidence_model = create_model(
+        f"{response_model.__name__}Confidence",
+        __config__=ConfigDict(extra="forbid"),
+        **confidence_fields,
+    )  # type: ignore[call-overload]
+
     envelope_model = create_model(
         f"{response_model.__name__}Envelope",
         __config__=ConfigDict(extra="forbid"),
         data=(response_model, Field(...)),
-        confidence=(dict[str, float], Field(...)),
+        confidence=(confidence_model, Field(...)),
     )
 
     try:
@@ -170,7 +184,17 @@ async def run_demo_extraction(
     # downstream JSON storage (DemoRecord.ai_result, PG JSON column)
     # accepts the dict without a custom serializer.
     values = envelope.data.model_dump(mode="json")
-    raw_confidences = envelope.confidence or {}
+    # ``confidence`` is a typed Pydantic model in production (built
+    # above to satisfy structured outputs). Tests sometimes substitute
+    # a raw dict directly. Handle both shapes so we don't crash on the
+    # test path or on a future SDK that returns the parsed dict.
+    raw_confidence_attr = envelope.confidence
+    if hasattr(raw_confidence_attr, "model_dump"):
+        raw_confidences: dict[str, Any] = raw_confidence_attr.model_dump()
+    elif isinstance(raw_confidence_attr, dict):
+        raw_confidences = raw_confidence_attr
+    else:
+        raw_confidences = {}
 
     confidences: dict[str, float] = {}
     for field_name in values:
