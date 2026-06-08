@@ -80,3 +80,72 @@ jobs:
           # Cross-run cache — speeds up subsequent builds a lot.
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+  deploy-container-app:
+    name: Deploy to Azure Container Apps
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    # Only auto-deploy on pushes to main and version tags. Manual
+    # workflow_dispatch runs still skip deploy unless the same
+    # condition is met, so an opt-in rebuild doesn't punt prod by
+    # accident.
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
+    steps:
+      - name: Azure login
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Resolve image tag to deploy
+        id: tag
+        # On a push to main → deploy `:main`. On a tag push → deploy
+        # the matching `:vX.Y.Z` so the running revision is pinned to
+        # the released image, not a moving `:latest`. Tag pushes also
+        # rebuild `:main` (because the tag commit is on main), but the
+        # tag deploy happens after and wins.
+        #
+        # Security: we strictly validate the resolved tag against
+        # `^[a-zA-Z0-9._-]+$` before exporting it. Even though only
+        # repo-writers can push tags, this prevents a maliciously
+        # named tag from injecting shell metacharacters into the
+        # later `az containerapp update --image ...:<tag>` call. Any
+        # mismatch fails the job loudly instead of running attacker
+        # input.
+        env:
+          GITHUB_REF_ENV: ${{ github.ref }}
+        run: |
+          if [[ "${GITHUB_REF_ENV}" == refs/tags/v* ]]; then
+            tag="${GITHUB_REF_ENV##refs/tags/}"
+          else
+            tag="main"
+          fi
+          if ! [[ "${tag}" =~ ^[a-zA-Z0-9._-]+$ ]]; then
+            echo "::error::Refusing to deploy: resolved image tag '${tag}' contains characters outside [a-zA-Z0-9._-]." >&2
+            exit 1
+          fi
+          echo "image_tag=${tag}" >> "$GITHUB_OUTPUT"
+
+      - name: Update Container App image
+        uses: azure/CLI@v2
+        env:
+          # Pass all values through env so the inline script reads
+          # them as shell variables — no `${{ ... }}` interpolation
+          # inside the script body, no injection surface.
+          CONTAINER_APP_NAME: ${{ secrets.AZURE_CONTAINER_APP_NAME }}
+          RESOURCE_GROUP: ${{ secrets.AZURE_RESOURCE_GROUP }}
+          IMAGE_REPO: ghcr.io/${{ github.repository }}
+          IMAGE_TAG: ${{ steps.tag.outputs.image_tag }}
+        with:
+          # Pinned to a known-good az CLI. Container Apps extension is
+          # installed by default on this image, no `az extension add`
+          # needed.
+          azcliversion: 2.65.0
+          inlineScript: |
+            az containerapp update \
+              --name "$CONTAINER_APP_NAME" \
+              --resource-group "$RESOURCE_GROUP" \
+              --image "$IMAGE_REPO:$IMAGE_TAG"
+
+      - name: Azure logout
+        if: always()
+        run: az logout
