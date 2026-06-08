@@ -67,10 +67,63 @@ def _coerce_date(value: Any) -> Any:
 
 _DateLike = Annotated[dt.date, BeforeValidator(_coerce_date)]
 
+
+def _coerce_int(value: Any) -> Any:
+    """Tolerate numeric strings on `int` fields.
+
+    Real documents render integers with thousands separators
+    ("1,234"), currency symbols ("$1234", "€1.234,00"), trailing
+    units ("30 días"), or signed prefixes. We strip non-digit
+    decoration and pass the rest to int(). Floats coerce by
+    truncation. Garbage passes through so Pydantic surfaces a clean
+    error the reviewer can correct.
+    """
+    if not isinstance(value, str):
+        return value
+    s = value.strip()
+    if not s:
+        return value
+    # Pull out the first signed integer-looking substring after we
+    # remove thousands separators. Handles "1,234.56" -> "1234" via
+    # int(float(...)), "$1,200" -> 1200, "30 días" -> 30.
+    cleaned = s.replace(",", "").replace(" ", "").replace("$", "").replace("€", "")
+    try:
+        return int(cleaned)
+    except (TypeError, ValueError):
+        try:
+            return int(float(cleaned))
+        except (TypeError, ValueError):
+            return value
+
+
+def _coerce_float(value: Any) -> Any:
+    """Tolerate numeric strings on `float` fields.
+
+    Same defenses as `_coerce_int`. ``"1,151.34"`` -> 1151.34.
+    ``"€1.234,00"`` (European decimal comma) is not auto-detected
+    here; we strip the comma and let the period stand, so European-
+    formatted values may need reviewer correction. That's acceptable
+    for a v1 demo.
+    """
+    if not isinstance(value, str):
+        return value
+    s = value.strip()
+    if not s:
+        return value
+    cleaned = s.replace(",", "").replace(" ", "").replace("$", "").replace("€", "")
+    try:
+        return float(cleaned)
+    except (TypeError, ValueError):
+        return value
+
+
+_IntLike = Annotated[int, BeforeValidator(_coerce_int)]
+_FloatLike = Annotated[float, BeforeValidator(_coerce_float)]
+
 _PRIMITIVE_TYPE_MAP: dict[str, Any] = {
     "str": str,
-    "int": int,
-    "float": float,
+    "int": _IntLike,
+    "float": _FloatLike,
     "bool": bool,
     "date": _DateLike,
     "list[str]": list[str],
