@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import datetime as dt
-
 import pytest
 from pydantic import BaseModel
 
@@ -37,12 +35,11 @@ def test_supports_all_primitive_types() -> None:
             SchemaFieldSpec(name="i", type="int"),
             SchemaFieldSpec(name="f", type="float"),
             SchemaFieldSpec(name="b", type="bool"),
-            SchemaFieldSpec(name="d", type="date"),
             SchemaFieldSpec(name="tags", type="list[str]"),
         ],
     )
     Model = build_pydantic_model(spec)  # noqa: N806 -- dynamically created class
-    inst = Model(s="x", i=1, f=1.5, b=True, d=dt.date(2026, 1, 1), tags=["a", "b"])
+    inst = Model(s="x", i=1, f=1.5, b=True, tags=["a", "b"])
     assert inst.tags == ["a", "b"]
 
 
@@ -70,11 +67,13 @@ def test_rejects_duplicate_field_names() -> None:
 def test_rejects_unsupported_type() -> None:
     # Route through spec_from_json so Pydantic's Literal validation is
     # wrapped into DemoSchemaError per the unsupported-type contract.
+    # ``date`` is no longer in the allowlist; the structured-outputs
+    # extractor sees date-like values as raw strings instead.
     with pytest.raises(DemoSchemaError):
         spec_from_json(
             {
                 "name": "Bad",
-                "fields": [{"name": "x", "type": "bytes"}],
+                "fields": [{"name": "x", "type": "date"}],
             }
         )
 
@@ -270,3 +269,22 @@ def test_nested_record_inside_list_record() -> None:
         ]
     )
     assert inst.line_items[0].pricing.quantity == 3
+
+
+def test_resulting_model_emits_clean_json_schema() -> None:
+    """Structured outputs require a clean JSON Schema. This catches any
+    rogue ``BeforeValidator`` remnant that would inject ``anyOf`` /
+    custom-validator weirdness and break ``responses.parse``.
+    """
+    spec = SchemaSpec(
+        name="Receipt",
+        fields=[
+            SchemaFieldSpec(name="vendor", type="str"),
+            SchemaFieldSpec(name="total_cents", type="int"),
+        ],
+    )
+    Model = build_pydantic_model(spec)  # noqa: N806 -- dynamically created class
+    schema = Model.model_json_schema()
+    assert "properties" in schema
+    assert "vendor" in schema["properties"]
+    assert "total_cents" in schema["properties"]

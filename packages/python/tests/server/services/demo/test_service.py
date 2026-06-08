@@ -25,7 +25,7 @@ _RECEIPT_SPEC = {
     "fields": [
         {"name": "vendor", "type": "str"},
         {"name": "total_cents", "type": "int"},
-        {"name": "date", "type": "date"},
+        {"name": "date", "type": "str"},
     ],
 }
 
@@ -103,7 +103,7 @@ async def test_auto_proposes_when_schema_omitted(db_session: AsyncSession) -> No
         fields=[
             SchemaFieldSpec(name="vendor", type="str"),
             SchemaFieldSpec(name="total_cents", type="int"),
-            SchemaFieldSpec(name="date", type="date"),
+            SchemaFieldSpec(name="date", type="str"),
         ],
     )
 
@@ -205,7 +205,7 @@ async def test_demo_floor_forces_min_flagged_ratio(
         "fields": [
             {"name": "vendor", "type": "str"},
             {"name": "total_cents", "type": "int"},
-            {"name": "date", "type": "date"},
+            {"name": "date", "type": "str"},
             {"name": "tax_cents", "type": "int"},
         ],
     }

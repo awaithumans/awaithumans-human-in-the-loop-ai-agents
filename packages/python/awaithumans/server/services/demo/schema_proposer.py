@@ -47,7 +47,7 @@ logger = logging.getLogger("awaithumans.server.services.demo.schema_proposer")
 _MAX_TOKENS = 4000
 _PROVIDER_LABEL = "Schema proposer"
 
-_SUPPORTED_PRIMITIVE_TYPES = ("str", "int", "float", "bool", "date", "list[str]")
+_SUPPORTED_PRIMITIVE_TYPES = ("str", "int", "float", "bool", "list[str]")
 _SUPPORTED_NESTED_TYPES = ("record", "list[record]")
 _SUPPORTED_TYPES = _SUPPORTED_PRIMITIVE_TYPES + _SUPPORTED_NESTED_TYPES
 
@@ -59,20 +59,22 @@ _SYSTEM_PROMPT = (
     "Rules:\n"
     "1. Each field name must be valid snake_case (lowercase letters, "
     "digits, underscores; must start with a letter).\n"
-    "2. Each field type must be one of: str, int, float, bool, date, "
+    "2. Each field type must be one of: str, int, float, bool, "
     "list[str], record, list[record].\n"
-    "3. The schema name must be a CamelCase Python identifier "
+    "3. Use `str` for date-like fields, free-form text, identifiers, "
+    "and anything not clearly numeric or boolean.\n"
+    "4. The schema name must be a CamelCase Python identifier "
     "describing the document.\n"
-    "4. Use `record` for a nested object with its own named fields "
+    "5. Use `record` for a nested object with its own named fields "
     "(e.g. an address block, a totals summary).\n"
-    "5. Use `list[record]` for repeating row structures (e.g. tables "
+    "6. Use `list[record]` for repeating row structures (e.g. tables "
     "of line items, employee rows, transaction logs). The repeated "
     "row's columns become the nested fields.\n"
-    "6. For `record` and `list[record]`, include a `fields` array "
+    "7. For `record` and `list[record]`, include a `fields` array "
     "describing the nested fields. Nested fields follow the same "
     "rules (snake_case, supported types). Nested records can "
     "themselves contain `record` or `list[record]`.\n"
-    "7. Pick the fields that carry the most useful information on "
+    "8. Pick the fields that carry the most useful information on "
     "the page. If the page is dominated by a table, the table should "
     "be the dominant field.\n\n"
     "Return ONLY a JSON object. No prose, no markdown, no code "
