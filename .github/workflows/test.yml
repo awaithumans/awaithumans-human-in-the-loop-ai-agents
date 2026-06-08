@@ -64,15 +64,6 @@ jobs:
           python-version: ${{ matrix.python-version }}
           cache: pip
 
-      - name: Install system deps for awaitverify fragmentation
-        # pdf2image is a transitive of [server] (the AwaitVerify
-        # demo backend imports it) and pdf2image needs poppler at
-        # runtime to read PDFs. Without poppler the awaitverify
-        # upload-path tests fail at fragment_document with a
-        # VerifyDocumentLoadError. The Debian package on
-        # ubuntu-latest covers both `pdftoppm` and `pdfinfo`.
-        run: sudo apt-get update && sudo apt-get install -y poppler-utils
-
       - name: Install package with all extras
         # `dev` brings in pytest. `server` is required because most
         # tests import server-side modules (routes, services,

@@ -59,8 +59,6 @@ _ALREADY_TZ_AWARE_IN_MIGRATION: frozenset[tuple[str, str]] = frozenset(
         ("service_api_keys", "last_used_at"),
         ("service_api_keys", "revoked_at"),
         ("tasks", "response_redacted_at"),
-        ("demo_records", "created_at"),
-        ("demo_records", "email_sent_at"),
     }
 )
 

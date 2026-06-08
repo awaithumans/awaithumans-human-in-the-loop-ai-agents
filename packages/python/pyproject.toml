@@ -114,27 +114,6 @@ server = [
     # Embed-token sign/verify (HS256). PyPI package name is `pyjwt`;
     # import is `import jwt`. Used only in embed_token_service.py.
     "pyjwt>=2.8.0",
-    # AwaitVerify landing demo extractor talks to Azure OpenAI via the
-    # standard OpenAI SDK's `AsyncAzureOpenAI` client. The `[server]`
-    # extra already pulls in slack-sdk + resend, so adding one more
-    # provider SDK here keeps `pip install awaithumans[server]` as the
-    # single command to stand up the full demo stack.
-    "openai>=1.50.0",
-    # Permissive date parsing for the demo schema_builder: the LLM
-    # returns dates in whatever format appears on the document
-    # (localised abbreviations, slashes, English long form). dateutil
-    # absorbs all of those and emits a real `datetime.date` so the
-    # Pydantic model accepts it without forcing the reviewer to
-    # hand-fix every demo task.
-    "python-dateutil>=2.9.0",
-    # AwaitVerify landing demo backs onto the managed AwaitVerify
-    # backend via the SDK's `verify_document`. That helper fragments
-    # the document client-side (Pillow + pdf2image) and encrypts each
-    # fragment with AES-256-GCM (cryptography). Bundling these in the
-    # [server] extra so `awaithumans dev` is the single install command
-    # for standing up the full demo stack.
-    "Pillow>=10.0.0",
-    "pdf2image>=1.17.0",
 ]
 temporal = [
     "temporalio>=1.7.0",
@@ -210,7 +189,6 @@ awaitverify-azure-di = [
 dev = [
     "pytest>=8.0.0",
     "pytest-asyncio>=0.24.0",
-    "pytest-httpx>=0.35.0",
     "ruff>=0.8.0",
     "mypy>=1.13.0",
 ]

@@ -79,7 +79,6 @@ _PUBLIC_PREFIXES = (
     "/api/channels/slack/events",  # HMAC request signature gates this
     "/api/channels/email/action/",  # magic links are self-signed
     "/api/embed/",  # service-key auth via require_service_key dep
-    "/api/demo/",  # AwaitVerify landing demo — Turnstile + caps gate, no session
 )
 
 

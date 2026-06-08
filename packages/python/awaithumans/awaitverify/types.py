@@ -22,25 +22,10 @@ class Priority(str, enum.Enum):
     turnaround target firm during Mon-Fri 8am-8pm ET. Outside business
     hours we still prioritize Express tasks over standard but the
     30-minute number is best-effort, not guaranteed.
-
-    DEMO is reserved for the AwaitVerify landing-page demo (public lane).
-    These tasks come from /demo/start (unauthenticated), do not bill,
-    route to a dedicated reviewer (DEMO_REVIEWER_EMAIL), and fire the
-    demo result email on submit instead of the customer webhook. Public
-    demos use a 5-minute claim timeout; the wizard polls for the claim
-    state and falls back to async email if no reviewer claims.
-
-    DEMO_HOT is the hot-lane variant used for warm prospects (WhatsApp
-    leads). Same routing as DEMO but pings a dedicated Slack channel/
-    role so the founder is alerted with priority. Hot demos never time
-    out in the wizard polling loop because the reviewer is expected to
-    be on standby for them.
     """
 
     STANDARD = "standard"
     HIGH = "high"
-    DEMO = "demo"
-    DEMO_HOT = "demo_hot"
 
 
 class ManagedAssignment(BaseModel):
