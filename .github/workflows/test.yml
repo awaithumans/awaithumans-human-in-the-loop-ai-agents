@@ -64,6 +64,14 @@ jobs:
           python-version: ${{ matrix.python-version }}
           cache: pip
 
+      - name: Install poppler for SDK PDF fragmentation
+        # The SDK's `verify_document` rasterises PDFs via pdf2image,
+        # which shells out to poppler at runtime. Without it, any
+        # awaitverify upload-path test fails at fragment_document
+        # with a VerifyDocumentLoadError. The Debian package on
+        # ubuntu-latest covers both `pdftoppm` and `pdfinfo`.
+        run: sudo apt-get update && sudo apt-get install -y poppler-utils
+
       - name: Install package with all extras
         # `dev` brings in pytest. `server` is required because most
         # tests import server-side modules (routes, services,
