@@ -33,3 +33,4 @@ uv.lock
 
 # Claude Code local artifacts
 .claude/
+.infisical.json

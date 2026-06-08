@@ -287,6 +287,121 @@ curl -X DELETE \
 rm -f <.awaithumans-dir>/dev.db
 ```
 
+## AwaitVerify landing demo (smoke test before launch)
+
+The landing demo at `/awaitverify` (inline teaser) and `/awaitverify/demo` (wizard) drives an authenticated reviewer task through the production AwaitVerify pipeline. Before pointing real visitors at it, run a hot-lane smoke yourself.
+
+### One-time setup
+
+Required env vars (set in your dev shell or `.env`):
+
+```sh
+# Cloudflare Turnstile (use the always-passes test secret for dev)
+export AWAITHUMANS_TURNSTILE_SECRET=1x0000000000000000000000000000000AA
+
+# Reviewer pool routing
+export AWAITHUMANS_DEMO_REVIEWER_EMAIL=you@your-company.com
+export AWAITHUMANS_DEMO_HOT_SLACK_CHANNEL_ID=C0123456789   # optional, hot-lane only
+export AWAITHUMANS_DEMO_HOT_SLACK_MENTION='<!channel>'     # default; set empty to suppress
+
+# Azure OpenAI deployment for extraction
+export AWAITHUMANS_AZURE_OPENAI_ENDPOINT=https://<your-resource>.openai.azure.com
+export AWAITHUMANS_AZURE_OPENAI_DEPLOYMENT=gpt-5-vision    # your deployment name
+export AWAITHUMANS_AZURE_OPENAI_API_KEY=<from-azure>
+export AWAITHUMANS_AZURE_OPENAI_API_VERSION=2024-10-21
+
+# Pool caps (defaults shown; tune to taste)
+export AWAITHUMANS_DEMO_DAILY_CAP=50
+export AWAITHUMANS_DEMO_PER_IP_CAP=3
+export AWAITHUMANS_DEMO_PER_EMAIL_WINDOW_DAYS=7
+export AWAITHUMANS_DEMO_DAILY_COST_CEILING_CENTS=500
+export AWAITHUMANS_DEMO_CONFIDENCE_THRESHOLD=0.85
+```
+
+The reviewer's email must match a real operator user in the dashboard (so the per-field submit route can authorize against `task.assigned_to_email`).
+
+### Walk-through
+
+1. **Boot the server**
+
+   ```sh
+   awaithumans dev
+   ```
+
+   Confirm the demo routes are mounted:
+
+   ```sh
+   curl -s "$AWAITHUMANS_URL/api/openapi.json" | jq -r '.paths | keys[]' | grep demo
+   # /api/demo/start
+   # /api/demo/{demo_id}/status
+   # /api/demo/{demo_id}/field/{field_name}/submit
+   ```
+
+2. **Boot the landing site**
+
+   In the landing repo:
+
+   ```sh
+   cd awaithumans-landing
+   cp .env.local.example .env.local   # then edit NEXT_PUBLIC_DEMO_API_URL
+   npm install
+   npm run dev
+   ```
+
+   Visit `http://localhost:3000/awaitverify`. Scroll to the "Try it" section.
+
+3. **Public-lane demo**
+
+   - Drop a 1-page invoice PDF (any will do) in the inline section.
+   - Wizard opens at `/awaitverify/demo`.
+   - Pick a preset (Invoice).
+   - Enter your work email + complete Turnstile + click "Run extraction".
+   - Wizard advances to the result page. High-confidence fields render immediately with a green check. Low-confidence fields show a pulsing "reviewer checking..." placeholder.
+
+4. **Reviewer side**
+
+   - In a separate browser session, sign in to the dashboard as the operator user matching `AWAITHUMANS_DEMO_REVIEWER_EMAIL`.
+   - Find the new task. The title is prefixed `DEMO:` for public lane or `URGENT! DEMO HOT:` for hot lane.
+   - For each pending field, hit the per-field submit endpoint directly while testing the live round trip:
+
+     ```sh
+     curl -X POST \
+       -H "Cookie: <your dashboard session cookie>" \
+       -H "Content-Type: application/json" \
+       -d '{"value":"Acme Corp"}' \
+       "$AWAITHUMANS_URL/api/demo/<demo_id>/field/vendor/submit"
+     ```
+
+     Once Task 34 (dashboard demo-mode UI) ships, this will be a button click in the dashboard. For now the per-field route is the contract.
+
+5. **Watch the wizard update**
+
+   - The result page polls every 2 seconds. Each field flashes green when it lands.
+   - When the last pending field is submitted, the receipt email fires (check the file transport or your inbox if Resend is configured).
+
+6. **Hot-lane demo**
+
+   - Visit `/awaitverify?lane=hot` (or `/awaitverify/demo?lane=hot` directly). The wizard sets `is_hot_demo=true` on submit.
+   - On the reviewer side, the Slack notification includes the configured mention (default `<!channel>`) and the task title is `URGENT! DEMO HOT: ...`.
+   - Hot-lane wizard never times out the polling; public-lane wizard swaps to a "Reviewer's offline, we'll email it" message after 5 minutes if no claim.
+
+7. **Reset**
+
+   ```sh
+   sqlite3 .awaithumans/dev.db 'DELETE FROM demo_records;'
+   ```
+
+### Things to verify before launch
+
+- [ ] Free-email gate rejects `@gmail.com`, `@yahoo.com`, etc. (try one and confirm the inline error).
+- [ ] Per-email weekly cap rejects a second submit from the same email within 7 days.
+- [ ] Disposable-email gate rejects `@mailinator.com`.
+- [ ] Receipt email lands in the visitor's inbox with the AI / corrections / final blocks rendered.
+- [ ] Hot-lane Slack notification pings the configured channel and includes the mention.
+- [ ] Multi-page PDF page picker actually renders thumbnails and submits the chosen page.
+- [ ] Browser back/forward across wizard steps does not blank the state.
+- [ ] Turnstile widget gates submission (try clicking submit before completing the challenge).
+
 ## What this guide doesn't cover
 
 - **Temporal / LangGraph adapters.** Those have their own examples

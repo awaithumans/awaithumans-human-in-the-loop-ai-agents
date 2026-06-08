@@ -11,6 +11,7 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 
+from pydantic import AliasChoices, Field
 from pydantic_settings import BaseSettings
 
 logger = logging.getLogger("awaithumans.server.core.config")
@@ -53,7 +54,13 @@ class Settings(BaseSettings):
     EMAIL_FROM_NAME: str | None = None  # "Acme Tasks"
     EMAIL_REPLY_TO: str | None = None
     # Resend transport.
-    RESEND_KEY: str | None = None
+    RESEND_KEY: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices(
+            "AWAITHUMANS_RESEND_KEY",
+            "RESEND_API_KEY",
+        ),
+    )
     # SMTP transport.
     SMTP_HOST: str | None = None
     SMTP_PORT: int = 587
@@ -92,10 +99,48 @@ class Settings(BaseSettings):
     # Used when building link-out URLs in Slack/email so humans can
     # click through to the dashboard. In production, this is the
     # HTTPS URL of the server (which also serves the dashboard).
-    PUBLIC_URL: str = "http://localhost:3001"
+    PUBLIC_URL: str = Field(
+        default="http://localhost:3001",
+        validation_alias=AliasChoices(
+            "AWAITHUMANS_PUBLIC_URL",
+            "PUBLIC_API_URL",
+        ),
+    )
 
     # ── Verification ─────────────────────────────────────────────────
     ANTHROPIC_API_KEY: str | None = None
+
+    # ── AwaitVerify managed backend (used by verify_document) ────────
+    # The demo's background runner calls the SDK's `verify_document`,
+    # which routes through the managed AwaitVerify backend. The SDK
+    # reads AWAITHUMANS_API_KEY / AWAITHUMANS_MANAGED_URL from the
+    # environment lazily, but pydantic-settings has already consumed
+    # the AWAITHUMANS_*-prefixed env vars by the time the SDK looks,
+    # so we pass them through Settings explicitly to keep one config
+    # surface. Aliases bind to the env names the SDK already documents
+    # so operators don't double-prefix the keys in `.env`.
+    AWAITHUMANS_API_KEY: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("AWAITHUMANS_API_KEY"),
+    )
+    AWAITHUMANS_MANAGED_URL: str = Field(
+        default="https://api.awaithumans.dev",
+        validation_alias=AliasChoices("AWAITHUMANS_MANAGED_URL"),
+    )
+
+    # ── Azure OpenAI (demo extractor) ────────────────────────────────
+    # The AwaitVerify landing demo extractor calls Azure OpenAI rather
+    # than Anthropic so the founder can route demo spend through their
+    # Azure deployment quota. The deployment name is what the OpenAI
+    # SDK calls the `model` parameter when talking to Azure.
+    AZURE_OPENAI_ENDPOINT: str | None = None
+    AZURE_OPENAI_DEPLOYMENT: str | None = None
+    # Optional separate (and typically faster + cheaper) deployment for
+    # the demo schema proposer. When unset, the proposer falls back to
+    # `AZURE_OPENAI_DEPLOYMENT` so single-deployment setups still work.
+    AZURE_OPENAI_SCHEMA_DEPLOYMENT: str | None = None
+    AZURE_OPENAI_API_KEY: str | None = None
+    AZURE_OPENAI_API_VERSION: str = "2024-10-21"
 
     def get_secret(self, env_name: str) -> str | None:
         """Read a secret value through Settings rather than raw os.environ.
@@ -154,11 +199,51 @@ class Settings(BaseSettings):
     EMBED_PARENT_ORIGINS: str = ""
     SERVICE_API_KEY: str | None = None
 
+    # ─── Demo (AwaitVerify landing demo) ─────────────────────────────
+    TURNSTILE_SECRET: str | None = None
+    DEMO_REVIEWER_EMAIL: str | None = None
+    DEMO_HOT_SLACK_CHANNEL_ID: str | None = None
+    # Public-lane (priority=demo) Slack channel id. When set, public
+    # demo tasks attach `notify=["slack:<id>"]` so the standard Slack
+    # notifier fires for them. When unset, falls back to
+    # DEMO_HOT_SLACK_CHANNEL_ID so a single configured channel can
+    # serve both lanes; when neither is set, the demo notifier skips
+    # Slack entirely (graceful fallback, no exception).
+    DEMO_PUBLIC_SLACK_CHANNEL_ID: str | None = None
+    # Slack mention prepended to hot-lane demo notifications. Default
+    # `<!channel>` pings everyone in the founder channel, impossible
+    # to miss on phone/computer. Override with `<@U123ABC>` for a
+    # direct ping or set to an empty string to suppress entirely
+    # (graceful fallback, no exception).
+    DEMO_HOT_SLACK_MENTION: str = "<!channel>"
+    DEMO_BOOKING_URL: str = "https://cal.com/awaithumans/15min"
+    DEMO_PROVIDER: str = "openai-gpt-5"
+    DEMO_CONFIDENCE_THRESHOLD: float = 0.95
+    # Demo guarantee: at least this fraction of fields routes to the
+    # reviewer even when the model is uniformly confident, so the
+    # visitor always sees the human-in-the-loop moment.
+    DEMO_MIN_FLAGGED_RATIO: float = 0.30
+    DEMO_CLAIM_TIMEOUT_SECONDS: int = 300  # public lane only; hot lane never times out
+    DEMO_DAILY_CAP: int = 50
+    DEMO_PER_IP_CAP: int = 3
+    DEMO_PER_IP_WINDOW_HOURS: int = 24
+    DEMO_PER_EMAIL_WINDOW_DAYS: int = 7
+    DEMO_DAILY_COST_CEILING_CENTS: int = 500
+    DEMO_FALLBACK_AFTER_HOURS: int = 72
+    DEMO_EMAIL_ALLOWLIST_EXTRA: str = ""  # comma-separated extra domains
+
     model_config = {
         "env_prefix": "AWAITHUMANS_",
         "env_file": ".env",
         "env_file_encoding": "utf-8",
         "case_sensitive": False,
+        # Fields with ``validation_alias=AliasChoices(...)`` (RESEND_KEY,
+        # PUBLIC_URL, AWAITHUMANS_API_KEY, etc.) would otherwise refuse
+        # the Python field name as a kwarg, breaking test fixtures that
+        # build Settings via ``Settings(RESEND_KEY="re_xxx", ...)``.
+        # ``populate_by_name=True`` keeps the original name accepted
+        # alongside the env-var aliases.
+        "populate_by_name": True,
         # Two namespaces share the `AWAITHUMANS_` prefix: server-side
         # (this Settings class) and SDK-side (`AWAITHUMANS_URL`,
         # `AWAITHUMANS_ADMIN_API_TOKEN` when used purely as a client

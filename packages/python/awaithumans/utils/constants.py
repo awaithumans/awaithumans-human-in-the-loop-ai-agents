@@ -378,3 +378,59 @@ AWAITVERIFY_UPLOAD_TIMEOUT_SECONDS = 300
 # enough to keep the upload phase under a few seconds on a normal
 # fiber line, low enough that a 5 Mbps uplink doesn't time out.
 AWAITVERIFY_UPLOAD_CONCURRENCY = 8
+
+# ─── Demo (AwaitVerify landing demo) ─────────────────────────────────────
+
+DEMO_FREE_EMAIL_DOMAINS = frozenset(
+    {
+        "gmail.com",
+        "googlemail.com",
+        "yahoo.com",
+        "yahoo.co.uk",
+        "outlook.com",
+        "hotmail.com",
+        "hotmail.co.uk",
+        "live.com",
+        "msn.com",
+        "icloud.com",
+        "me.com",
+        "mac.com",
+        "aol.com",
+        "proton.me",
+        "protonmail.com",
+        "pm.me",
+        "yandex.com",
+        "gmx.com",
+        "gmx.de",
+        "mail.com",
+        "zoho.com",
+        "fastmail.com",
+        "tutanota.com",
+    }
+)
+
+DEMO_DISPOSABLE_EMAIL_DOMAINS = frozenset(
+    {
+        "mailinator.com",
+        "tempmail.com",
+        "10minutemail.com",
+        "guerrillamail.com",
+        "throwawaymail.com",
+        "yopmail.com",
+        "trashmail.com",
+        "sharklasers.com",
+        "getairmail.com",
+        "maildrop.cc",
+        "dispostable.com",
+        "fakemail.net",
+    }
+)
+
+DEMO_MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024  # 10 MB
+DEMO_DEFAULT_DAILY_CAP = 50
+DEMO_DEFAULT_PER_IP_CAP = 3
+DEMO_DEFAULT_PER_IP_WINDOW_HOURS = 24
+DEMO_DEFAULT_PER_EMAIL_WINDOW_DAYS = 7
+DEMO_DEFAULT_DAILY_COST_CEILING_CENTS = 500  # $5/day
+DEMO_DEFAULT_FALLBACK_AFTER_HOURS = 72
+DEMO_MAX_LLM_TOKENS = 2000
