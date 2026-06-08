@@ -1,11 +1,18 @@
 """Demo API routes (unauthenticated, gated by Turnstile + rate caps).
 
-The v2 demo surface is four endpoints:
+The active demo surface is three endpoints:
 
     POST /api/demo/propose-schema   (multipart, LLM proposes a schema)
     POST /api/demo/start            (multipart, kicks off extraction)
     GET  /api/demo/{demo_id}/status (polled by the wizard)
-    POST /api/demo/{demo_id}/field/{field_name}/submit (reviewer correction)
+
+Plus one deprecated marker that returns 410 Gone:
+
+    POST /api/demo/{demo_id}/field/{field_name}/submit
+
+The demo now routes reviewer work through the SDK's
+``verify_document`` against the managed AwaitVerify backend, so
+per-field submission is not used anymore.
 
 No session cookie, no admin bearer on the public routes. The Turnstile
 check lives in the orchestrator (``start_demo``) along with the
@@ -21,6 +28,7 @@ machinery in ``services/demo/rate_limit.py`` only runs on ``/start``.
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import json
 import logging
@@ -29,7 +37,6 @@ from typing import Any
 
 from fastapi import (
     APIRouter,
-    BackgroundTasks,
     Depends,
     File,
     Form,
@@ -40,11 +47,6 @@ from fastapi import (
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from awaithumans.server.core.auth import (
-    InvalidSessionError,
-    SessionClaims,
-    verify_session,
-)
 from awaithumans.server.db.connection import get_session
 from awaithumans.server.db.models import DemoRecord, Task
 from awaithumans.server.schemas.demo import DemoStatusResponse, StartDemoResponse
@@ -60,11 +62,8 @@ from awaithumans.server.services.demo.service import (
     StartDemoInput,
     _create_awaitverify_task,
     start_demo,
-    submit_demo_field,
 )
-from awaithumans.server.services.user_service import get_user
 from awaithumans.utils.constants import (
-    DASHBOARD_SESSION_COOKIE_NAME,
     DEMO_MAX_FILE_SIZE_BYTES,
 )
 from awaithumans.utils.time import to_utc_unix
@@ -133,7 +132,6 @@ async def propose_schema_route(
 @router.post("/start", response_model=StartDemoResponse)
 async def start_demo_route(
     request: Request,
-    background_tasks: BackgroundTasks,
     email: str = Form(...),
     schema_spec_json: str | None = Form(default=None),
     is_hot_demo: bool = Form(default=False),
@@ -152,6 +150,13 @@ async def start_demo_route(
     fell below the confidence threshold, it schedules
     ``_create_awaitverify_task`` to run after the response is sent so
     the route stays fast.
+
+    The background runner uses ``asyncio.create_task`` rather than
+    FastAPI's ``BackgroundTasks``: ``_create_awaitverify_task`` blocks
+    on ``verify_document``, which long-polls the managed backend for
+    the entire reviewer SLA window (potentially hours).
+    ``BackgroundTasks`` would tie that lifetime to the request, but
+    ``asyncio.create_task`` lets it survive past the HTTP response.
     """
     page_png = await page_image.read()
     if len(page_png) > DEMO_MAX_FILE_SIZE_BYTES:
@@ -167,12 +172,15 @@ async def start_demo_route(
     ip_hash = _hash_ip(request)
 
     async def _run_background(*, demo_id: str, page_png: bytes) -> None:
-        """Wrap the real background runner so the orchestrator stays
-        framework-agnostic. FastAPI's ``BackgroundTasks`` accepts a
-        callable plus kwargs; we register it here, after start_demo
-        has committed the DemoRecord, so the runner picks up the
-        record by id once the response is on the wire."""
-        background_tasks.add_task(_create_awaitverify_task, demo_id=demo_id, page_png=page_png)
+        """Schedule the verify_document runner detached from the request.
+
+        ``asyncio.create_task`` returns immediately and lets the
+        coroutine run for the reviewer's full SLA window. Exceptions
+        inside the task are logged by the runner itself; any
+        unhandled exception would be surfaced by the event loop's
+        default handler.
+        """
+        asyncio.create_task(_create_awaitverify_task(demo_id=demo_id, page_png=page_png))
 
     output = await start_demo(
         session,
@@ -267,85 +275,25 @@ async def submit_demo_field_route(
     request: Request,
     session: AsyncSession = Depends(get_session),
 ) -> dict[str, Any]:
-    """Apply one reviewer correction to a demo record.
+    """Deprecated: per-field reviewer submit is gone.
 
-    The reviewer's browser hits this once per field; each call returns
-    the new ``status`` + remaining ``pending_field_names`` so the
-    dashboard can render its progress UI. When the last pending field
-    lands, the linked AwaitVerify task is completed and the receipt
-    email fires out-of-band.
-
-    Auth: the route is under the public ``/api/demo/`` prefix (so the
-    visitor's status polling endpoint stays cookie-less), so this
-    handler does its own session check rather than relying on the
-    dashboard auth middleware. Same allow-list as
-    ``/api/tasks/{id}/complete``: operators and admin-bearer callers.
+    The demo now routes through the SDK's ``verify_document`` against
+    the managed AwaitVerify backend, which uses an all-at-once
+    reviewer submission rather than the per-field flow this endpoint
+    was built for. The route stays registered so any stale wizard
+    JavaScript hits 410 (not 404) and the operator sees a clear
+    signal in the access log. Visitors keep polling
+    ``/api/demo/{demo_id}/status`` to learn when the managed reviewer
+    has submitted; the orchestrator flips status to
+    ``review_complete`` and the wizard renders the corrections from
+    there.
     """
-    reviewer_email = await _require_demo_reviewer(request, session)
-    result = await submit_demo_field(
-        session,
-        demo_id=demo_id,
-        field_name=field_name,
-        value=body.value,
-        reviewer_email=reviewer_email,
+    _ = demo_id, field_name, body, request, session
+    raise HTTPException(
+        status_code=410,
+        detail=(
+            "Per-field submit is deprecated; the demo now uses "
+            "verify_document and the managed AwaitVerify reviewer "
+            "submits the full response at once."
+        ),
     )
-    return {
-        "demo_id": result.demo_id,
-        "status": result.status.value,
-        "pending_field_names": result.pending_field_names,
-        "field_corrections": result.field_corrections,
-    }
-
-
-async def _require_demo_reviewer(
-    request: Request,
-    session: AsyncSession,
-) -> str | None:
-    """Resolve the reviewer's email from the session cookie or 401/403.
-
-    Mirrors the dashboard auth middleware for the per-field submit path
-    (which sits under the public ``/api/demo/`` prefix, so the
-    middleware doesn't run its cookie check). Admin-bearer callers
-    return ``None`` so the service skips the per-task assignee check,
-    matching the regular task complete route where the agent's
-    bearer token isn't a human identity.
-    """
-    # Admin-bearer escape hatch (parity with the rest of the API).
-    if getattr(request.state, "auth_admin_token", False):
-        return None
-
-    cookie = request.cookies.get(DASHBOARD_SESSION_COOKIE_NAME)
-    if not cookie:
-        raise HTTPException(
-            status_code=401,
-            detail="Authentication required.",
-        )
-
-    try:
-        claims: SessionClaims = verify_session(cookie)
-    except InvalidSessionError:
-        raise HTTPException(
-            status_code=401,
-            detail="Invalid or expired session.",
-        ) from None
-
-    if not claims.is_operator:
-        raise HTTPException(
-            status_code=403,
-            detail="Operator role required.",
-        )
-
-    user = await get_user(session, claims.user_id)
-    if user is None or not user.active:
-        raise HTTPException(
-            status_code=401,
-            detail="Session user no longer active.",
-        )
-    if not user.is_operator:
-        # Defensive: the claim says operator but the DB row was demoted.
-        raise HTTPException(
-            status_code=403,
-            detail="Operator role required.",
-        )
-
-    return user.email

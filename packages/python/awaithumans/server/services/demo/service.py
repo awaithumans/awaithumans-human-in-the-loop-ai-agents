@@ -4,11 +4,15 @@ Sequences Turnstile verify, email gate, rate caps, schema spec
 resolution, AI extraction, confidence-driven flagging, and the
 DemoRecord insert.
 
-The downstream AwaitVerify task creation runs as a background task.
-The orchestrator returns to the wizard immediately with the AI result
-so it can render the confirmed fields. The reviewer is then routed via
-the standard AwaitVerify pipeline using ``priority=demo`` (or
-``demo_hot`` for warm prospects).
+The downstream AwaitVerify task creation runs as a background task
+that hands the document off to the SDK's ``verify_document``, which
+routes through the managed AwaitVerify backend at
+``api.awaithumans.dev``. The managed backend handles fragmentation,
+signed upload of the document, the reviewer dashboard rendering, and
+Slack notification. The orchestrator returns to the wizard immediately
+with the AI result so it can render the confirmed fields; the
+background task blocks on ``verify_document`` until the reviewer
+submits, then writes the corrections back onto the DemoRecord.
 """
 
 from __future__ import annotations
@@ -22,6 +26,7 @@ from typing import Any
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from awaithumans.server.channels.email.demo_email import (
+    send_demo_fallback_email,
     send_demo_review_complete_email,
 )
 from awaithumans.server.core.config import settings
@@ -192,31 +197,6 @@ def _allowlist_from_settings() -> frozenset[str]:
     return frozenset(domain.strip().lower() for domain in raw.split(",") if domain.strip())
 
 
-def _demo_notify_routes(*, is_hot: bool) -> list[str] | None:
-    """Build the Slack notify route list for a demo task.
-
-    Hot-lane (priority=demo_hot) routes to DEMO_HOT_SLACK_CHANNEL_ID;
-    public-lane (priority=demo) routes to DEMO_PUBLIC_SLACK_CHANNEL_ID
-    and falls back to the hot channel id when the public one is unset
-    so a single configured channel can serve both lanes during early
-    deploys. The hot-lane override in the Slack notifier still
-    re-targets hot tasks to DEMO_HOT_SLACK_CHANNEL_ID at post time, so
-    the route target here is mostly a "this task should ping Slack"
-    signal; it just has to parse as a real route. When no channel id
-    is configured at all, returns None so the notifier skips Slack
-    (graceful, no warning).
-    """
-    hot_id = (settings.DEMO_HOT_SLACK_CHANNEL_ID or "").strip()
-    public_id = (settings.DEMO_PUBLIC_SLACK_CHANNEL_ID or "").strip()
-    target = hot_id if is_hot else (public_id or hot_id)
-    if not target:
-        return None
-    # Slack channel ids (C... / G...) are valid route targets as-is;
-    # `#name` strings are also accepted by the routing parser. Either
-    # form works since the parser only splits on the first `:`.
-    return [f"slack:{target}"]
-
-
 # ─── Per-field reviewer submit ──────────────────────────────────────────
 
 
@@ -363,24 +343,34 @@ async def _complete_linked_task(
 
 
 async def _create_awaitverify_task(*, demo_id: str, page_png: bytes) -> None:
-    """Background runner: create the AwaitVerify task for a demo.
+    """Background runner: route the demo through the managed AwaitVerify backend.
 
-    Runs OUTSIDE the request lifecycle (kicked off by
-    ``BackgroundTasks.add_task`` in the route layer). Acquires its own
-    short-lived session so the orchestrator's request session can be
-    closed immediately after returning the AI result to the wizard.
+    Runs OUTSIDE the request lifecycle. The SDK's ``verify_document``
+    handles fragmentation, signed upload, reviewer routing, Slack
+    notification, and long-polling until the reviewer submits. We
+    block on it and write the validated result back onto the
+    ``DemoRecord`` once it lands.
 
-    On success, writes ``awaitverify_task_id`` back onto the
-    ``DemoRecord`` and flips status to ``awaiting_claim``. On any
-    failure, marks the row ``routing_failed`` so the polling endpoint
-    can surface the fallback state to the wizard. The actual fallback
-    email send lives in Task 15.
+    Lifecycle transitions:
+      - ROUTING (set by orchestrator) -> AWAITING_CLAIM before the
+        verify call so the polling endpoint surfaces the handoff.
+      - AWAITING_CLAIM -> REVIEW_COMPLETE on reviewer submit.
+      - any failure -> ROUTING_FAILED, plus a fallback email.
+
+    No DB session is held across the long-poll: we open and close a
+    short-lived session per write so the connection pool isn't pinned
+    while the SDK waits on the managed backend.
     """
-    from awaithumans.awaitverify.types import ManagedAssignment, Priority
+    # Imports are lazy so the demo module doesn't pay the AwaitHumans
+    # SDK import cost (or trip on missing managed deps) when the
+    # background runner is never invoked.
+    from awaithumans import AwaitHumans
+    from awaithumans.awaitverify.client import verify_document
     from awaithumans.server.db.connection import get_async_session_factory
-    from awaithumans.server.services.task_service import create_task
 
     factory = get_async_session_factory()
+
+    # ── 1. Load record, build the response schema + AI prefill ──────
     async with factory() as session:
         record = await session.get(DemoRecord, demo_id)
         if record is None:
@@ -388,142 +378,104 @@ async def _create_awaitverify_task(*, demo_id: str, page_png: bytes) -> None:
             return
 
         try:
-            priority = Priority.DEMO_HOT if record.is_hot_demo else Priority.DEMO
-            assign_to = ManagedAssignment(priority=priority).model_dump()
-
-            ai_values = record.ai_result or {}
-            pending_names = list(record.pending_field_names)
-            schema_name = record.schema_name
-
-            # Response schema: render the FULL Pydantic shape so the
-            # reviewer dashboard builds a proper typed form (nested
-            # records, list[record], booleans, numbers). Pre-fill with
-            # the AI's extraction so the reviewer corrects rather than
-            # re-types. High-confidence fields still render confirmed
-            # in the visitor's wizard; the reviewer flow keeps the
-            # complete object for context.
             pydantic_model = build_pydantic_model(spec_from_json(record.schema_spec))
-            response_schema: dict[str, Any] = pydantic_model.model_json_schema()
-            initial_response = ai_values
-
-            # Payload: tiny human-readable context the dashboard renders
-            # as form fields above the response form. NO nested objects,
-            # NO base64. The schema/AI values live in response_schema +
-            # initial_response, not here.
-            total_fields = len(record.field_confidences or {})
-            above_threshold = total_fields - len(pending_names)
-            payload = {
-                "demo_id": demo_id,
-                "schema_name": schema_name,
-                "ai_confidence_summary": (
-                    f"{above_threshold} of {total_fields} fields above threshold"
-                ),
-            }
-            payload_schema = {
-                "type": "object",
-                "properties": {
-                    "demo_id": {"type": "string"},
-                    "schema_name": {"type": "string"},
-                    "ai_confidence_summary": {"type": "string"},
-                },
-            }
-
-            # Known gap: the source document image is not attached to
-            # the reviewer task. `task_service.create_task` has no
-            # attachments/documents kwarg, and inlining megabytes of
-            # base64 in `payload` made the dashboard unusable. The
-            # reviewer corrects against the schema + initial_response
-            # for now; production should attach the page via the
-            # fragmentation pipeline (managed AwaitVerify flow), or a
-            # dedicated demo-asset endpoint the dashboard can fetch
-            # from. The orchestrator still receives `page_png` so the
-            # wiring is ready when that surface lands.
-            _ = page_png
-
-            # Hot-lane demos (warm prospects) get an URGENT prefix on the
-            # task title so the founder can spot the ping at a glance in
-            # mobile/desktop notifications. The Slack notifier additionally
-            # adds the `[DEMO·HOT]` tag and an optional @-mention (see
-            # _demo_prefix / DEMO_HOT_SLACK_MENTION). Public-lane demos
-            # keep the original `DEMO:` prefix unchanged.
-            if record.is_hot_demo:
-                task_title = (
-                    f"URGENT! DEMO HOT: verify {len(pending_names)} "
-                    f"flagged {schema_name} field(s) for {record.email}"
-                )
-            else:
-                task_title = (
-                    f"DEMO: verify {len(pending_names)} {schema_name} field(s) for {record.email}"
-                )
-
-            task_description = (
-                f"Verify the AI's extraction of {schema_name} from this page. "
-                "Correct any field the AI got wrong. The Pydantic shape and the AI's "
-                "current values are pre-filled below."
-            )
-
-            task, _ = await create_task(
-                session,
-                task=task_description,
-                payload=payload,
-                payload_schema=payload_schema,
-                response_schema=response_schema,
-                timeout_seconds=72 * 3600,
-                idempotency_key=f"demo:{demo_id}",
-                assign_to=assign_to,
-                notify=_demo_notify_routes(is_hot=record.is_hot_demo),
-                initial_response=initial_response,
-                task_metadata={
-                    "demo_id": demo_id,
-                    "demo_email": record.email,
-                    "schema_name": schema_name,
-                    "is_hot_demo": str(record.is_hot_demo).lower(),
-                    "pending_field_count": str(len(pending_names)),
-                    "task_title": task_title,
-                },
-            )
-            record.awaitverify_task_id = task.id
-            record.status = DemoStatus.AWAITING_CLAIM
-            session.add(record)
-            await session.commit()
-            logger.info(
-                "Created AwaitVerify task %s for demo %s (priority=%s)",
-                task.id,
-                demo_id,
-                priority.value,
-            )
-        except Exception as exc:
-            logger.exception("Failed to create demo AwaitVerify task: %s", exc)
+            ai_instance = pydantic_model.model_validate(record.ai_result or {})
+        except Exception as exc:  # noqa: BLE001
+            logger.exception("Demo %s schema/AI prefill build failed: %s", demo_id, exc)
             record.status = DemoStatus.ROUTING_FAILED
             session.add(record)
             await session.commit()
-            # TODO(task-15): send_demo_fallback_email(record)
+            await session.refresh(record)
+            asyncio.create_task(send_demo_fallback_email(record))
             return
 
-    # Fire the Slack notifier OUTSIDE the create-task session so the
-    # connection is back in the pool before the (potentially slow)
-    # chat.postMessage round trip. The standard route handler does
-    # this via FastAPI BackgroundTasks; we're already running in a
-    # background task ourselves (the orchestrator handed us off via
-    # `background_runner`), so we can just await it inline.
-    notify = _demo_notify_routes(is_hot=record.is_hot_demo)
-    if notify:
-        try:
-            from awaithumans.server.channels.slack import notify_task as notify_task_slack
+        schema_name = record.schema_name
+        is_hot_demo = record.is_hot_demo
+        email = record.email
+        pending_field_names = list(record.pending_field_names)
 
-            await notify_task_slack(
-                task_id=task.id,
-                task_title=task_title,
-                notify=notify,
-                form_definition=None,
-            )
-        except Exception as exc:  # noqa: BLE001
-            # Slack failure must not flip the demo to routing_failed:
-            # the task IS created and the reviewer can still find it
-            # via the dashboard. Log and move on.
-            logger.warning(
-                "Slack notify failed for demo %s task %s: %s",
-                demo_id,
-                task.id,
-                exc,
-            )
+        record.status = DemoStatus.AWAITING_CLAIM
+        session.add(record)
+        await session.commit()
+
+    task_description = (
+        f"Verify the AI extraction of this {schema_name}. Correct any field the AI got wrong."
+    )
+    task_metadata = {
+        "demo_id": demo_id,
+        "demo_email": email,
+        "schema_name": schema_name,
+        "is_hot_demo": str(is_hot_demo).lower(),
+        "pending_field_count": str(len(pending_field_names)),
+    }
+    priority = "high" if is_hot_demo else "standard"
+
+    # The SDK reads AWAITHUMANS_API_KEY / AWAITHUMANS_MANAGED_URL from
+    # os.environ on its own, but pydantic-settings has already consumed
+    # those env vars by the time the SDK reaches for them. Pass both
+    # through explicitly so the SDK sees the same values the server
+    # would see anywhere else.
+    client = AwaitHumans(
+        api_key=settings.AWAITHUMANS_API_KEY,
+        managed_url=settings.AWAITHUMANS_MANAGED_URL,
+    )
+
+    # ── 2. Block on the managed backend until the reviewer submits ──
+    try:
+        human_result = await verify_document(
+            client=client,
+            document_bytes=page_png,
+            task_description=task_description,
+            response_schema=pydantic_model,
+            prior_extraction=ai_instance,
+            priority=priority,
+            timeout_seconds=72 * 3600,
+            task_metadata=task_metadata,
+        )
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Demo %s verify_document failed: %s", demo_id, exc, exc_info=True)
+        async with factory() as session:
+            record = await session.get(DemoRecord, demo_id)
+            if record is None:
+                logger.error("Demo %s vanished while marking routing_failed", demo_id)
+                return
+            record.status = DemoStatus.ROUTING_FAILED
+            session.add(record)
+            await session.commit()
+            await session.refresh(record)
+        asyncio.create_task(send_demo_fallback_email(record))
+        return
+
+    # ── 3. Persist the reviewer result and notify the visitor ───────
+    human_values = human_result.model_dump(mode="json")
+    async with factory() as session:
+        record = await session.get(DemoRecord, demo_id)
+        if record is None:
+            logger.error("Demo %s vanished after verify_document return", demo_id)
+            return
+        # Only the previously-pending fields get a correction entry;
+        # high-confidence fields stay as the AI extracted them so the
+        # wizard's confirmed-on-load fields keep their values. The
+        # full reviewer result lives implicitly in ai_result +
+        # field_corrections (visitor side merges them) and on the
+        # managed backend's audit trail.
+        record.field_corrections = {
+            name: human_values.get(name) for name in record.pending_field_names
+        }
+        record.pending_field_names = []
+        record.status = DemoStatus.REVIEW_COMPLETE
+        # verify_document does not currently surface the managed task
+        # id back to the caller (it only returns the validated Pydantic
+        # result). Leave the column null and revisit when the SDK
+        # exposes a hook (e.g. an on_task_created callback).
+        # TODO(awaitverify-sdk): expose managed task_id from verify_document.
+        session.add(record)
+        await session.commit()
+        await session.refresh(record)
+
+    asyncio.create_task(send_demo_review_complete_email(record))
+    logger.info(
+        "Demo %s routed through verify_document (priority=%s)",
+        demo_id,
+        priority,
+    )

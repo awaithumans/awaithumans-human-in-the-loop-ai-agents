@@ -157,20 +157,18 @@ def test_status_route_returns_404(client: TestClient) -> None:
     assert response.status_code == 404, response.text
 
 
-def test_submit_field_route_requires_auth(client: TestClient) -> None:
-    """Anonymous callers can't submit field corrections.
+def test_submit_field_route_is_deprecated(client: TestClient) -> None:
+    """Per-field submit returns 410 Gone after the verify_document rewire.
 
-    The route does its own session check because ``/api/demo/`` is in
-    the public-prefix allowlist (the visitor's wizard polls
-    ``/status`` without a cookie). Without a session cookie OR admin
-    bearer, the route must 401 before any DB read so we don't leak
-    which demo IDs exist.
+    The demo now routes through the SDK's ``verify_document`` and the
+    managed AwaitVerify reviewer submits the full response at once.
+    The route stays registered as a deprecation marker so stale wizard
+    JavaScript hits 410 (not 404) and the access log shows the legacy
+    traffic clearly.
     """
     response = client.post(
         "/api/demo/does-not-exist/field/total/submit",
         json={"value": 1234},
     )
-    assert response.status_code in (401, 404), response.text
-    # We expect 401 in v2: auth runs before the 404 lookup so that
-    # demo IDs aren't enumerable. Anything else is a regression.
-    assert response.status_code == 401
+    assert response.status_code == 410, response.text
+    assert "deprecated" in response.text.lower()

@@ -110,6 +110,24 @@ class Settings(BaseSettings):
     # ── Verification ─────────────────────────────────────────────────
     ANTHROPIC_API_KEY: str | None = None
 
+    # ── AwaitVerify managed backend (used by verify_document) ────────
+    # The demo's background runner calls the SDK's `verify_document`,
+    # which routes through the managed AwaitVerify backend. The SDK
+    # reads AWAITHUMANS_API_KEY / AWAITHUMANS_MANAGED_URL from the
+    # environment lazily, but pydantic-settings has already consumed
+    # the AWAITHUMANS_*-prefixed env vars by the time the SDK looks,
+    # so we pass them through Settings explicitly to keep one config
+    # surface. Aliases bind to the env names the SDK already documents
+    # so operators don't double-prefix the keys in `.env`.
+    AWAITHUMANS_API_KEY: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("AWAITHUMANS_API_KEY"),
+    )
+    AWAITHUMANS_MANAGED_URL: str = Field(
+        default="https://api.awaithumans.dev",
+        validation_alias=AliasChoices("AWAITHUMANS_MANAGED_URL"),
+    )
+
     # ── Azure OpenAI (demo extractor) ────────────────────────────────
     # The AwaitVerify landing demo extractor calls Azure OpenAI rather
     # than Anthropic so the founder can route demo spend through their
