@@ -26,7 +26,7 @@ import logging
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
-from pydantic import BaseModel, Field, create_model
+from pydantic import BaseModel, ConfigDict, Field, create_model
 
 from awaithumans.server.core.config import settings
 from awaithumans.server.services.demo.exceptions import DemoProviderError
@@ -120,10 +120,15 @@ async def run_demo_extraction(
     validated Pydantic instance, eliminating the JSON-parsing /
     coercion / re-validation gauntlet the previous implementation ran.
     """
+    # Structured outputs require BOTH `data` and `confidence` in the
+    # JSON Schema ``required`` array, so neither field can have a
+    # default. The envelope also needs ``additionalProperties: false``,
+    # which Pydantic emits when ``extra="forbid"`` is set on the model.
     envelope_model = create_model(
         f"{response_model.__name__}Envelope",
+        __config__=ConfigDict(extra="forbid"),
         data=(response_model, Field(...)),
-        confidence=(dict[str, float], Field(default_factory=dict)),
+        confidence=(dict[str, float], Field(...)),
     )
 
     try:

@@ -27,7 +27,7 @@ from __future__ import annotations
 import keyword
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field, create_model
+from pydantic import BaseModel, ConfigDict, Field, create_model
 
 from awaithumans.server.services.demo.exceptions import DemoSchemaError
 
@@ -111,15 +111,23 @@ def build_pydantic_model(spec: SchemaSpec) -> type[BaseModel]:
     fields_for_create: dict[str, tuple[Any, Any]] = {}
     for field in spec.fields:
         py_type = _resolve_field_type(field)
-        # Every field is Optional so the LLM can return ``null`` for
-        # values it can't read confidently. Those become None on the
-        # validated model, the orchestrator treats them as low-
-        # confidence, and the reviewer fills them in. Without this,
-        # one missing cell on a 30-field document fails the entire
-        # extraction.
-        fields_for_create[field.name] = (py_type | None, Field(default=None))
+        # OpenAI structured outputs require every property to be in
+        # the JSON Schema ``required`` array. Pydantic only marks a
+        # field as required when there's no default, so we use
+        # ``Field(...)``. The ``T | None`` union still lets the model
+        # emit ``null`` for cells it can't read confidently; the
+        # orchestrator treats nulls as low-confidence and routes them
+        # to the reviewer.
+        fields_for_create[field.name] = (py_type | None, Field(...))
 
-    model: type[BaseModel] = create_model(spec.name, **fields_for_create)  # type: ignore[call-overload]
+    model: type[BaseModel] = create_model(
+        spec.name,
+        # ``extra="forbid"`` makes Pydantic emit ``additionalProperties:
+        # false`` in the JSON Schema, which structured outputs also
+        # requires on every object schema.
+        __config__=ConfigDict(extra="forbid"),
+        **fields_for_create,
+    )  # type: ignore[call-overload]
     return model
 
 
