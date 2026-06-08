@@ -128,8 +128,9 @@ def _dump(value: Any) -> str:
 def to_openai_strict_schema(schema: dict) -> dict:
     """Adapt VERIFIER_OUTPUT_SCHEMA for OpenAI / Azure strict mode.
 
-    OpenAI's `response_format: json_schema` strict mode requires every
-    property be in `required` and the object set
+    The Responses API's `text.format` json_schema (and the older
+    `response_format` json_schema before it) require, in strict mode,
+    every property be in `required` and the object set
     `additionalProperties: false`. We promote `parsed_response` into
     `required` and widen its type to include `null` so the model can
     emit null when no NL parsing is needed — strict mode allows nulls

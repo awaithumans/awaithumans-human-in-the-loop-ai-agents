@@ -14,6 +14,91 @@ into a versioned release when tagged.
 
 ---
 
+## [0.1.10] — 2026-06-04
+
+Combined release covering the work that landed between 0.1.8 and now.
+0.1.9 was bumped in source for the `managed_url` and upload-path
+fixes but never published to PyPI; those fixes are included here.
+
+### Fixed
+
+- **OpenAI Flow B and Flow C migrated to the Responses API.** GPT-5.x
+  Azure deployments reject the older `chat.completions` +
+  `response_format` shape with "Unsupported parameter:
+  'response_format'. In the Responses API, this parameter has moved to
+  'text.format'." Every call site that used the old shape
+  (`_extract_openai`, `_extract_azure_openai`, the structuring step,
+  and both OpenAI + Azure OpenAI verifier providers) now calls
+  `sdk.responses.create` with `text={"format": {...}}`. The same code
+  path serves gpt-4o, gpt-5, and o-series uniformly with no per-model
+  branching and no caller-facing toggle. Image content blocks also
+  declare `detail="auto"` so behavior is deterministic across
+  providers (Azure tolerated omission, OpenAI direct does not).
+- **Reducto SDK updated to the v3 upload-then-extract shape.** The old
+  signature (`extract.run(document=, schema=, model=)`) has long been
+  replaced by `upload(file=...)` then `extract.run(input=<URL>,
+  instructions={"schema": ..., "system_prompt": ...})`. Flow B with
+  `ReductoExtraction` now works against the current SDK. The upload
+  step sniffs the document's magic bytes to pick the right filename
+  extension so Reducto does not reject mislabeled documents with 415
+  DOCUMENT_CORRUPT.
+- **Gemini verifier schema converter no longer drops property names.**
+  `_to_gemini_schema` previously recursed into `properties` and
+  treated every property name as a schema keyword to be filtered.
+  With `VERIFIER_OUTPUT_SCHEMA` that meant `passed`, `reason`, and
+  `parsed_response` were stripped, leaving `required` referencing
+  properties that no longer existed and Gemini 400ing the request.
+  The converter now preserves `properties` name maps verbatim and
+  only filters inside subschemas.
+- **`managed_url` default points at the production custom domain.**
+  The Python SDK previously defaulted `managed_url` to the raw Azure
+  Container Apps hostname, which does not resolve from customer
+  machines. A clean `pip install awaithumans` with only
+  `AWAITHUMANS_API_KEY` set now succeeds end-to-end against
+  `https://api.awaithumans.dev` without any URL override. The first
+  call to `verify_document` also emits an INFO log line showing the
+  resolved `managed_url`, so future misconfigurations (typos, stale
+  staging URLs, forgotten overrides) surface in customer logs
+  instead of a DNS stack trace.
+- **Upload path tolerates slow uplinks.** The per-PUT timeout for
+  uploading encrypted fragments to Azure Blob signed URLs is now
+  300s (was 30s). On a normal residential uplink, a multi-page
+  document opens 20-30 parallel TLS PUTs and individual writes can
+  legitimately stall past 30s under saturation. Concurrency is now
+  bounded at 8 (`AWAITVERIFY_UPLOAD_CONCURRENCY`) so a many-fragment
+  document never melts the customer's uplink. The new
+  `upload_timeout_seconds: int | None = None` kwarg on
+  `verify_document` lets customers on flaky networks tune the
+  per-PUT timeout without monkey-patching.
+
+### Added
+
+- **`AzureDIExtraction` runs end-to-end.** Previously raised
+  `ProviderNotSupportedError`. Calls Azure Document Intelligence's
+  analyze endpoint (default model `prebuilt-layout`) and pipes the
+  Markdown layout output through the configured structuring step.
+  Pair with `OpenAIStructuring` or `AzureOpenAIStructuring`
+  depending on which OpenAI deployment your policy allows.
+- **`AzureOpenAIStructuring` runs end-to-end.** Previously raised
+  `ProviderNotSupportedError`. Text-only Responses-API call against
+  an Azure deployment. Lets OCR pipelines (Azure DI today, future
+  Docling and PaddleOCR) close the loop using Azure rather than
+  OpenAI direct.
+- **Gemini verifier default bumped to `gemini-2.5-flash`** (was
+  `gemini-2.0-flash`, which Google has decommissioned).
+- **`AWAITVERIFY_UPLOAD_TIMEOUT_SECONDS` and
+  `AWAITVERIFY_UPLOAD_CONCURRENCY`** in `awaithumans.utils.constants`.
+  The two upload tuning knobs are now named constants rather than
+  magic numbers.
+- **Env-gated provider smoke tests.**
+  `tests/awaitverify/test_extraction_smoke.py` and
+  `tests/tasks/test_verifier_smoke.py` hit real vendor APIs when the
+  matching `*_API_KEY` env vars are present and skip otherwise.
+  Catches SDK-shape regressions (the Reducto fix above started as
+  one of these) before they hit a customer demo.
+
+---
+
 ## [0.1.8] — 2026-06-02
 
 AwaitVerify launch release. The first version that ships every layer of the paid managed product end-to-end: client-side encrypted document fragmentation, managed decrypt proxy, nested-Pydantic form rendering, per-page review carousel, pre-filled responses, immediate post-submit redaction, and a complete Mintlify docs section. Smoke test green from `verify_document()` → reviewer dashboard → typed Pydantic result back into the customer's process, with the response content destroyed everywhere except inside that process after the round-trip.

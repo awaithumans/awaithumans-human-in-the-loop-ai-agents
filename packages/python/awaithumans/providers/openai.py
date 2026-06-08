@@ -20,9 +20,10 @@ class OpenAI(ProviderCredentials):
 class OpenAIExtraction(ExtractionConfig):
     """Single-call Flow B configuration for OpenAI.
 
-    Extracts AND structures in one API call via OpenAI's strict
-    JSON-schema response_format. Requires a vision-capable model
-    (GPT-4o-2024-08-06 or newer; GPT-5 when available).
+    Extracts AND structures in one API call via the OpenAI Responses
+    API (text.format json_schema). Requires a vision-capable model
+    supported by the Responses API — gpt-4o family, gpt-5 family, and
+    o-series models all qualify.
 
     Example:
         OpenAIExtraction(

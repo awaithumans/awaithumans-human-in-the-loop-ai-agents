@@ -171,7 +171,7 @@ VERIFIER_CLAUDE_TOOL_NAME = "submit_verdict"
 VERIFIER_OPENAI_DEFAULT_MODEL = "gpt-4o-2024-11-20"
 VERIFIER_OPENAI_DEFAULT_API_KEY_ENV = "OPENAI_API_KEY"
 
-VERIFIER_GEMINI_DEFAULT_MODEL = "gemini-2.0-flash"
+VERIFIER_GEMINI_DEFAULT_MODEL = "gemini-2.5-flash"
 VERIFIER_GEMINI_DEFAULT_API_KEY_ENV = "GEMINI_API_KEY"
 
 VERIFIER_AZURE_DEFAULT_API_KEY_ENV = "AZURE_OPENAI_API_KEY"
@@ -363,6 +363,21 @@ AWAITVERIFY_LIBREOFFICE_DEFAULT_BIN = "libreoffice"
 # Max wall time for the LibreOffice conversion subprocess. Office
 # files of typical size convert in 1-5s; 60s gives generous headroom.
 AWAITVERIFY_LIBREOFFICE_TIMEOUT_SECONDS = 60
+
+# Per-PUT timeout for uploading an encrypted fragment to its signed
+# Azure Blob URL. The earlier 30s default was tuned for the office
+# uplink we tested on; a customer on a residential 5 Mbps uplink
+# saturates the pipe with 20+ concurrent PUTs and individual writes
+# stall past 30s. 300s leaves generous headroom for slow uplinks
+# without masking a real outage.
+AWAITVERIFY_UPLOAD_TIMEOUT_SECONDS = 300
+
+# Cap on concurrent fragment PUTs per verify_document call. Without
+# a bound, a 10-page document opens 50 simultaneous TLS PUTs and any
+# residential uplink melts. 8 is the sweet spot we tested at: high
+# enough to keep the upload phase under a few seconds on a normal
+# fiber line, low enough that a 5 Mbps uplink doesn't time out.
+AWAITVERIFY_UPLOAD_CONCURRENCY = 8
 
 # ─── Demo (AwaitVerify landing demo) ─────────────────────────────────────
 
