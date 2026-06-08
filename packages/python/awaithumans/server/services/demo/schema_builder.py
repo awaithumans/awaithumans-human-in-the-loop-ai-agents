@@ -190,7 +190,13 @@ def build_pydantic_model(spec: SchemaSpec) -> type[BaseModel]:
     fields_for_create: dict[str, tuple[Any, Any]] = {}
     for field in spec.fields:
         py_type = _resolve_field_type(field)
-        fields_for_create[field.name] = (py_type, Field(...))
+        # Every field is Optional so the LLM can return ``null`` for
+        # values it can't read confidently. Those become None on the
+        # validated model, the orchestrator treats them as low-
+        # confidence, and the reviewer fills them in. Without this,
+        # one missing cell on a 30-field document fails the entire
+        # extraction.
+        fields_for_create[field.name] = (py_type | None, Field(default=None))
 
     model: type[BaseModel] = create_model(spec.name, **fields_for_create)  # type: ignore[call-overload]
     return model
