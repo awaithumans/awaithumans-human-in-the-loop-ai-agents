@@ -127,6 +127,14 @@ server = [
     # Pydantic model accepts it without forcing the reviewer to
     # hand-fix every demo task.
     "python-dateutil>=2.9.0",
+    # AwaitVerify landing demo backs onto the managed AwaitVerify
+    # backend via the SDK's `verify_document`. That helper fragments
+    # the document client-side (Pillow + pdf2image) and encrypts each
+    # fragment with AES-256-GCM (cryptography). Bundling these in the
+    # [server] extra so `awaithumans dev` is the single install command
+    # for standing up the full demo stack.
+    "Pillow>=10.0.0",
+    "pdf2image>=1.17.0",
 ]
 temporal = [
     "temporalio>=1.7.0",
