@@ -34,4 +34,21 @@ describe("looksRich", () => {
 		expect(looksRich("Verify John's ID")).toBe(false);
 		expect(looksRich("Approve the $4,000 refund (urgent)")).toBe(false);
 	});
+
+	it("treats a long single-line description as rich (prose, not a giant heading)", () => {
+		const longPlain =
+			"Approve this refund request from the customer for their recent " +
+			"order, confirm the item was returned to the warehouse, and check " +
+			"there are no prior refunds on the account before deciding";
+		expect(longPlain.length).toBeGreaterThan(120);
+		expect(looksRich(longPlain)).toBe(true);
+	});
+
+	it("keeps a normal-length one-line title as a heading", () => {
+		// ~110 chars: a long but reasonable headline still renders as a heading.
+		const headline =
+			"Approve the $4,000 refund for order 4821 and add a short reason for the decision either way please";
+		expect(headline.length).toBeLessThanOrEqual(120);
+		expect(looksRich(headline)).toBe(false);
+	});
 });
