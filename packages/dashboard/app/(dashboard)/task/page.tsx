@@ -24,6 +24,7 @@ import {
 import { CopyButton } from "@/components/copy-button";
 import { ErrorBanner } from "@/components/error-banner";
 import { Eyebrow } from "@/components/eyebrow";
+import { Markdown, looksRich } from "@/components/markdown";
 import { NotificationFailureBanner } from "@/components/notification-failure-banner";
 import { StatusBadge } from "@/components/status-badge";
 import { TerminalSpinner } from "@/components/terminal-spinner";
@@ -303,7 +304,13 @@ function TaskDetailPageInner() {
 					>
 						← Back to tasks
 					</button>
-					<h1 className="text-2xl font-bold">{task.task}</h1>
+					{looksRich(task.task) ? (
+						<div className="mt-1 max-w-3xl">
+							<Markdown>{task.task}</Markdown>
+						</div>
+					) : (
+						<h1 className="text-2xl font-bold">{task.task}</h1>
+					)}
 					<div className="flex items-center gap-3 mt-2">
 						<StatusBadge status={task.status} />
 						<span className="text-white/30 text-xs font-mono">{task.id}</span>
@@ -368,7 +375,9 @@ function TaskDetailPageInner() {
 											<span className="text-white/40 text-sm min-w-[120px] font-mono">
 												{key}
 											</span>
-											<span className="text-sm break-all">{value}</span>
+											<span className="text-sm break-words whitespace-pre-wrap">
+												{value}
+											</span>
 										</div>
 									),
 								)}

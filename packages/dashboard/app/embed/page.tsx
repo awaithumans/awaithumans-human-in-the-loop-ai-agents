@@ -9,6 +9,7 @@ import {
 	initialValueFor,
 	type FormValue,
 } from "@/components/form-renderer";
+import { Markdown, looksRich } from "@/components/markdown";
 import { EmbedFetchError, embedFetch } from "@/lib/embed/api";
 import { postEmbed } from "@/lib/embed/post-message";
 import { extractEmbedToken } from "@/lib/embed/token";
@@ -171,7 +172,13 @@ function EmbedTaskInner() {
 	if (completed) {
 		return (
 			<div className="mx-auto max-w-xl p-6">
-				<h1 className="mb-4 font-mono text-lg font-medium">{task.task}</h1>
+				{looksRich(task.task) ? (
+					<div className="mb-4">
+						<Markdown>{task.task}</Markdown>
+					</div>
+				) : (
+					<h1 className="mb-4 font-mono text-lg font-medium">{task.task}</h1>
+				)}
 				<div className="rounded-md border border-brand/40 bg-brand/10 p-4 font-mono text-sm">
 					<p className="mb-1 text-brand">Submitted</p>
 					<p className="text-fg-2">Your response has been recorded.</p>
@@ -183,6 +190,22 @@ function EmbedTaskInner() {
 	return (
 		<div className="mx-auto max-w-xl p-6">
 			<h1 className="mb-4 font-mono text-lg font-medium">{task.task}</h1>
+			{task.task_metadata && Object.keys(task.task_metadata).length > 0 ? (
+				<div className="mb-4 rounded-md border border-brand/20 bg-brand/[0.03] p-3">
+					<div className="space-y-2">
+						{Object.entries(task.task_metadata).map(([key, value]) => (
+							<div key={key} className="flex items-start gap-3">
+								<span className="min-w-[100px] font-mono text-fg-2 text-xs">
+									{key}
+								</span>
+								<span className="whitespace-pre-wrap break-words text-sm">
+									{value}
+								</span>
+							</div>
+						))}
+					</div>
+				</div>
+			) : null}
 			{task.form_definition ? (
 				<>
 					<FormRenderer
