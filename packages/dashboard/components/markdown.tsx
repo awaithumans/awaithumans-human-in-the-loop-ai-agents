@@ -87,13 +87,21 @@ export function Markdown({
 	);
 }
 
+// A single-line title past this length is really a brief, not a
+// heading. Rendering it as a giant <h1> wraps into a wall of bold text,
+// so we route it through prose rendering instead. Tuned so a normal
+// one-line task title (a dozen-ish words) stays a heading.
+const TITLE_PROSE_LENGTH_THRESHOLD = 120;
+
 /**
  * Heuristic: does this string benefit from Markdown/prose rendering?
- * True when it spans multiple lines or contains common Markdown syntax.
- * Short single-line titles stay as a plain heading so existing document
- * tasks look unchanged.
+ * True when it spans multiple lines, contains common Markdown syntax,
+ * or is long enough that a heading would look messy. Short single-line
+ * titles stay as a plain heading so existing document tasks look
+ * unchanged.
  */
 export function looksRich(text: string): boolean {
+	if (text.length > TITLE_PROSE_LENGTH_THRESHOLD) return true;
 	if (text.includes("\n")) return true;
 	return /(\*\*|__|^#{1,6}\s|^[-*+]\s|\[[^\]]+\]\([^)]+\)|`)/m.test(text);
 }
