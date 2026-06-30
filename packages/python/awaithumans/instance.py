@@ -184,6 +184,36 @@ class AwaitHumans:
     def verify_document_sync(self, **kwargs: Any) -> Any:
         return asyncio.run(self.verify_document(**kwargs))
 
+    async def await_review(
+        self,
+        *,
+        task_description: str,
+        response_schema: type[BaseModel],
+        task_metadata: dict[str, str] | None = None,
+        priority: Priority | str | None = None,
+        timeout_seconds: int | None = None,
+    ) -> Any:
+        """Route a no-document text/data decision to a human reviewer.
+
+        See the module-level `await_review` for the full argument
+        reference. Billed as one standard page.
+        """
+        from awaithumans.awaitverify.client import (  # noqa: PLC0415
+            await_review as _review,
+        )
+
+        return await _review(
+            client=self,
+            task_description=task_description,
+            response_schema=response_schema,
+            task_metadata=task_metadata,
+            priority=priority,
+            timeout_seconds=timeout_seconds,
+        )
+
+    def await_review_sync(self, **kwargs: Any) -> Any:
+        return asyncio.run(self.await_review(**kwargs))
+
     # ── camelCase aliases (Pillar 12 rev 3 dual-naming) ─────────────
 
     async def awaitHuman(self, **kwargs: Any) -> Any:  # noqa: N802
@@ -197,6 +227,12 @@ class AwaitHumans:
 
     def awaitVerifySync(self, **kwargs: Any) -> Any:  # noqa: N802
         return self.verify_document_sync(**kwargs)
+
+    async def awaitReview(self, **kwargs: Any) -> Any:  # noqa: N802
+        return await self.await_review(**kwargs)
+
+    def awaitReviewSync(self, **kwargs: Any) -> Any:  # noqa: N802
+        return self.await_review_sync(**kwargs)
 
 
 # ── Module-level default client (lazy) ──────────────────────────────

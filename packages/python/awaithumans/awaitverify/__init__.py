@@ -2,7 +2,11 @@
 
 from __future__ import annotations
 
-from awaithumans.awaitverify.client import VerifyTimeoutRangeError, verify_document
+from awaithumans.awaitverify.client import (
+    VerifyTimeoutRangeError,
+    await_review,
+    verify_document,
+)
 from awaithumans.awaitverify.errors import (
     VerifyDepsMissingError,
     VerifyDocumentArgError,
@@ -19,6 +23,7 @@ from awaithumans.awaitverify.types import ManagedAssignment, Priority
 
 __all__ = [
     "verify_document",
+    "await_review",
     "ManagedAssignment",
     "Priority",
     "fragment_document",
