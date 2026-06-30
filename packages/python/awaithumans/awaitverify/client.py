@@ -345,39 +345,128 @@ async def verify_document(
         resolved_timeout,
     )
 
-    # ── 5. Poll until terminal ──────────────────────────────────────
+    # ── 5 + 6. Poll until terminal, validate, return ───────────────
+    return await _await_terminal_and_validate(
+        client=client,
+        task_id=task.task_id,
+        resolved_timeout=resolved_timeout,
+        response_schema=response_schema,
+    )
+
+
+async def await_review(
+    *,
+    client: AwaitHumans | None = None,
+    task_description: str,
+    response_schema: type[T],
+    task_metadata: dict[str, str] | None = None,
+    priority: Priority | str | None = None,
+    timeout_seconds: int | None = None,
+) -> T:
+    """Route a no-document decision to a human reviewer and await the result.
+
+    The text-review sibling of ``verify_document``: no file is uploaded.
+    The reviewer sees ``task_description`` (the instruction) plus any
+    ``task_metadata`` (free-form context/data shown verbatim in Slack
+    and the dashboard) and fills the typed form derived from
+    ``response_schema``. Billed as one standard page, the same as a
+    one-page document verification.
+
+    Use this when an agent needs a human judgment on text or structured
+    data rather than a document — an approval, a classification, a
+    free-text answer.
+
+    Args:
+        client: AwaitHumans client. If None, uses the lazy default
+            (which reads AWAITHUMANS_API_KEY / AWAITHUMANS_MANAGED_URL
+            from environment).
+        task_description: Plain-English instruction the reviewer sees.
+            Supports multi-paragraph prose — the dashboard renders it
+            as Markdown.
+        response_schema: Pydantic model the result is validated against.
+        task_metadata: Free-form key-value context shown to the human
+            verbatim in Slack and the dashboard (e.g. the data to judge:
+            ``{"customer": "Acme", "amount": "$4,000"}``). Keys/values
+            are strings; nested structures are rejected by the backend.
+        priority: "standard" (base rate) or "high" (Express SLA, 2x
+            rate). Defaults to standard.
+        timeout_seconds: Server-side task lifetime. Min 24h, max 30 days.
+            Defaults to 48h.
+    """
+    if client is None:
+        from awaithumans.instance import get_default_client  # noqa: PLC0415
+
+        client = get_default_client()
+
+    resolved_timeout = _resolve_timeout(timeout_seconds)
+    resolved_priority = _resolve_priority(priority)
+    logger.info("AwaitReview: using managed_url=%s", client.managed_url)
+
+    # No document: skip upload/fragment/encrypt entirely. Create the
+    # task with no upload_session_id — the managed backend mints a
+    # placeholder session and forwards zero fragments.
+    response_schema_json = json.dumps(response_schema.model_json_schema())
+    task = await _managed_create_task(
+        managed_url=client.managed_url,
+        api_key=client.api_key,
+        upload_session_id=None,
+        task_description=task_description,
+        response_schema_json=response_schema_json,
+        priority=resolved_priority.value,
+        task_metadata=task_metadata,
+        initial_response=None,
+    )
+    logger.info("AwaitReview task created: id=%s (timeout=%ds)", task.task_id, resolved_timeout)
+
+    return await _await_terminal_and_validate(
+        client=client,
+        task_id=task.task_id,
+        resolved_timeout=resolved_timeout,
+        response_schema=response_schema,
+    )
+
+
+async def _await_terminal_and_validate(
+    *,
+    client: AwaitHumans,
+    task_id: str,
+    resolved_timeout: int,
+    response_schema: type[T],
+) -> T:
+    """Long-poll a managed task to a terminal state, then validate the
+    reviewer's response against ``response_schema``. Shared by
+    ``verify_document`` and ``await_review``."""
     deadline = asyncio.get_event_loop().time() + resolved_timeout
     while True:
         polled = await _managed_poll_task(
             managed_url=client.managed_url,
             api_key=client.api_key,
-            task_id=task.task_id,
+            task_id=task_id,
             timeout_seconds=_POLL_STEP_SECONDS,
         )
         if polled.status == "completed":
             break
         if polled.status in ("timed_out", "cancelled"):
-            raise VerifyTaskNonTerminalError(task.task_id, polled.status)
+            raise VerifyTaskNonTerminalError(task_id, polled.status)
         # status == "awaiting_review" → loop
         if asyncio.get_event_loop().time() >= deadline:
-            raise VerifyTaskTimeoutError(task.task_id, resolved_timeout)
+            raise VerifyTaskTimeoutError(task_id, resolved_timeout)
 
     if polled.response_json is None:
         raise VerifyError(
             code="VERIFY_TASK_COMPLETED_WITHOUT_RESPONSE",
-            message=f"Task {task.task_id} is completed but has no response body.",
+            message=f"Task {task_id} is completed but has no response body.",
             hint="This indicates a managed backend bug. Please file an issue.",
             docs_url="https://docs.awaithumans.dev/awaitverify/errors",
         )
 
-    # ── 6. Validate against response_schema and return ──────────────
     try:
         parsed = json.loads(polled.response_json)
         return response_schema.model_validate(parsed)
     except Exception as exc:
         raise VerifyError(
             code="VERIFY_RESPONSE_VALIDATION_FAILED",
-            message=f"Reviewer response for task {task.task_id} failed schema validation.",
+            message=f"Reviewer response for task {task_id} failed schema validation.",
             hint=(
                 f"Validation error: {exc}\n\n"
                 "The reviewer's submission did not match response_schema. "

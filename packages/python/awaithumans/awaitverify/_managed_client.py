@@ -141,7 +141,7 @@ async def create_task(
     *,
     managed_url: str,
     api_key: str | None,
-    upload_session_id: str,
+    upload_session_id: str | None,
     task_description: str,
     response_schema_json: str,
     priority: str,
@@ -150,6 +150,11 @@ async def create_task(
 ) -> CreatedTask:
     """POST /api/v1/awaitverify/tasks.
 
+    ``upload_session_id`` is None for a no-document text review — the
+    managed backend mints a placeholder session and forwards the task
+    with no fragments. Pass the id from ``create_upload_session`` for a
+    normal document verification.
+
     ``initial_response`` carries the customer's prior extraction (Flow A)
     or the SDK-run extraction output (Flow B) as a JSON payload matching
     ``response_schema``. Managed validates it server-side and forwards
@@ -157,14 +162,16 @@ async def create_task(
     pre-populated. Omit (or pass None) for pure-human review.
     """
     body: dict[str, Any] = {
-        "upload_session_id": upload_session_id,
         "task_description": task_description,
         "response_schema_json": response_schema_json,
         "priority": priority,
     }
-    # Only include task_metadata / initial_response when set so the
-    # managed backend's schema validation doesn't see an ambiguous
-    # explicit null where "omitted" is the correct signal.
+    # Only include upload_session_id / task_metadata / initial_response
+    # when set so the managed backend's schema validation doesn't see an
+    # ambiguous explicit null where "omitted" is the correct signal.
+    # Omitting upload_session_id selects the no-document path.
+    if upload_session_id is not None:
+        body["upload_session_id"] = upload_session_id
     if task_metadata:
         body["task_metadata"] = task_metadata
     if initial_response is not None:

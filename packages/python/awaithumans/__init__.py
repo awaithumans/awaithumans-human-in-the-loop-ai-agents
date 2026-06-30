@@ -99,6 +99,25 @@ awaitVerify = verify_document  # noqa: N816
 awaitVerifySync = verify_document_sync  # noqa: N816
 
 
+async def await_review(**kwargs: Any) -> Any:
+    """Module-level shim — uses the lazy default client.
+
+    No-document text/data review: route a human judgment with just a
+    task description and a response schema, no file required.
+    """
+    return await get_default_client().await_review(**kwargs)
+
+
+def await_review_sync(**kwargs: Any) -> Any:
+    """Sync shim — uses the lazy default client."""
+    return get_default_client().await_review_sync(**kwargs)
+
+
+# camelCase aliases for the review shims
+awaitReview = await_review  # noqa: N816
+awaitReviewSync = await_review_sync  # noqa: N816
+
+
 # Module-level type re-export needed by the shim's signature above
 from typing import Any  # noqa: E402
 
@@ -117,6 +136,11 @@ __all__ = [
     "verify_document_sync",
     "awaitVerify",
     "awaitVerifySync",
+    # AwaitReview — no-document text/data review (snake + camel)
+    "await_review",
+    "await_review_sync",
+    "awaitReview",
+    "awaitReviewSync",
     # AwaitVerify types
     "Priority",
     "ManagedAssignment",
