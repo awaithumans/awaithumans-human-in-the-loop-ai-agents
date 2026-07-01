@@ -1,0 +1,141 @@
+---
+title: "Human review without a document"
+description: "Route a text or data decision to a human with await_review(). No file, under 10 lines, typed result back."
+---
+
+`await_review()` is the no-document sibling of `verify_document()`. Reach for it when your agent needs a **human judgment on text or structured data** rather than a document: an approval, a classification, a free-text answer, a policy check, a "does this look right?" before the workflow continues.
+
+The reviewer sees your instruction plus any context you attach, fills a typed form, and the answer flows back into your code as a validated Pydantic instance. No file is uploaded, and it is billed as one standard page.
+
+<Note>
+Requires `awaithumans` 0.1.11 or newer.
+</Note>
+
+## 1. Install
+
+```bash
+pip install "awaithumans>=0.1.11"
+```
+
+No extras needed. `await_review` is pure SDK (httpx + pydantic); the document-processing extras are only for `verify_document`.
+
+## 2. Get an API key
+
+Sign in at [app.awaithumans.dev](https://app.awaithumans.dev), open **API keys**, and click **Create key**. Copy the `ah_sk_live_...` value once (you cannot see it again), then set it as an environment variable:
+
+```bash
+export AWAITHUMANS_API_KEY="ah_sk_live_..."
+```
+
+New accounts start with a free trial credit. [Pricing](/awaitverify/pricing)
+
+## 3. Define the answer you want back
+
+The reviewer fills a form generated from your Pydantic schema, so define exactly what your workflow needs:
+
+```python
+from pydantic import BaseModel, Field
+
+
+class RefundDecision(BaseModel):
+    approved: bool = Field(description="Approve the refund?")
+    reason: str | None = Field(default=None, description="Why or why not")
+```
+
+A `bool` becomes a Yes/No switch, an `Enum` becomes a dropdown, a nested `BaseModel` becomes a section, and a `list[BaseModel]` becomes an editable table. [Schema patterns](/awaitverify/response-schemas)
+
+## 4. Call await_review
+
+```python
+import asyncio
+from awaithumans import await_review
+
+
+async def main() -> None:
+    decision = await await_review(
+        task_description=(
+            "Approve this $4,000 refund on order #4821? The item was "
+            "returned and received back in the warehouse, and there are "
+            "no prior refunds on the account. Reply yes or no with a "
+            "short reason."
+        ),
+        response_schema=RefundDecision,
+        task_metadata={
+            "customer": "Acme Corp",
+            "order": "#4821",
+            "amount": "$4,000",
+        },
+    )
+
+    if decision.approved:
+        print("Approved:", decision.reason)
+    else:
+        print("Rejected:", decision.reason)
+
+
+asyncio.run(main())
+```
+
+`await_review()` is async and long-polls the managed backend until the reviewer submits. For a synchronous workflow, use the sync wrapper:
+
+```python
+from awaithumans import await_review_sync
+
+decision = await_review_sync(
+    task_description="...",
+    response_schema=RefundDecision,
+)
+```
+
+### Arguments
+
+<ParamField path="task_description" type="str" required>
+  The instruction the reviewer reads. Markdown is supported, and long descriptions render as formatted prose.
+</ParamField>
+<ParamField path="response_schema" type="type[BaseModel]" required>
+  The Pydantic model the reviewer's answer is validated against before it returns to your code.
+</ParamField>
+<ParamField path="task_metadata" type="dict[str, str]">
+  Free-form context shown to the reviewer verbatim, typically the data to judge (`{"customer": "Acme", "amount": "$4,000"}`). Keys and values are strings.
+</ParamField>
+<ParamField path="priority" type='"standard" | "high"' default="standard">
+  `"high"` routes the task to the Express tier.
+</ParamField>
+<ParamField path="timeout_seconds" type="int" default="172800">
+  Server-side task lifetime. Minimum 24h, maximum 30 days.
+</ParamField>
+
+## 5. What the reviewer sees
+
+The moment your call lands, the task appears in the reviewer dashboard (and notifies the review channel):
+
+1. Your `task_description` as the brief.
+2. A **Context** panel listing your `task_metadata`.
+3. A typed form built from `response_schema` (here, an approve switch and a reason box).
+
+They fill it in and click **Submit**, and your `await_review()` call returns the typed `RefundDecision` with their answer.
+
+## 6. Turnaround and pricing
+
+- **Standard** tier: typically a few hours.
+- **Express** tier (`priority="high"`): around 30 minutes during business hours.
+- Billed as **one standard page** ($0.80) per review, the same as a one-page document verification. [Pricing](/awaitverify/pricing)
+
+## Hand this page to your coding agent
+
+This page is self-contained. Point your coding agent (Claude Code, Cursor, and similar) at this URL and ask it to add an `await_review` step to your workflow. Everything it needs (install, key, schema, call, response handling) is above.
+
+<CardGroup cols={2}>
+  <Card title="Verify a document instead" icon="file-lines" href="/awaitverify/quickstart">
+    Same managed reviewers, for tasks where a document is the thing being checked.
+  </Card>
+  <Card title="Response schemas" icon="brackets-curly" href="/awaitverify/response-schemas">
+    Patterns for nested models, tables, optionals, and enums.
+  </Card>
+  <Card title="Pricing" icon="tag" href="/awaitverify/pricing">
+    Per-review cost, the Express tier, and how credit works.
+  </Card>
+  <Card title="Errors" icon="circle-exclamation" href="/awaitverify/errors">
+    Every exception, what triggers it, and the fix.
+  </Card>
+</CardGroup>

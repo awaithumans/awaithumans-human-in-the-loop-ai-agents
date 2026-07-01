@@ -62,6 +62,7 @@
             "pages": [
               "awaitverify/overview",
               "awaitverify/quickstart",
+              "awaitverify/text-review",
               "awaitverify/flows",
               "awaitverify/response-schemas",
               "awaitverify/providers",
