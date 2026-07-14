@@ -64,6 +64,7 @@
               "awaitverify/quickstart",
               "awaitverify/text-review",
               "awaitverify/flows",
+              "awaitverify/machine-extraction",
               "awaitverify/response-schemas",
               "awaitverify/providers",
               "awaitverify/pricing",

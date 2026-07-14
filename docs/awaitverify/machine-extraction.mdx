@@ -1,0 +1,205 @@
+---
+title: "Machine extraction (extract_document)"
+description: "Machine-only extraction over HTTP. One page image in, typed fields with per-field confidence out. Optional human escalation."
+---
+
+Machine extraction is AwaitVerify's machine-only tier. Where `verify_document()` puts a human reviewer on every document, `POST /api/v1/extract` runs the extraction entirely by machine and returns per-field confidence scores — with an optional toggle to escalate low-confidence fields to AwaitVerify's human reviewers before the response returns.
+
+Use it when you have document volume that doesn't justify a human on every page, but you still want honest signals about which fields to trust.
+
+<Note>
+An `extract_document()` SDK helper is coming soon. Today you call the HTTP endpoint directly — the examples below use `curl` and `httpx`.
+</Note>
+
+## The endpoint
+
+```
+POST https://api.awaithumans.dev/api/v1/extract
+Authorization: Bearer <your API key>
+Content-Type: application/json
+```
+
+Get your API key from [app.awaithumans.dev/keys](https://app.awaithumans.dev/keys) — the same key you use for `verify_document()`.
+
+One request carries **one document page image**, base64-encoded. `image/png` or `image/jpeg`, max 10 MB. Multi-page documents: rasterize each page and send one request per page.
+
+## Request
+
+```json
+{
+  "document_base64": "<base64-encoded PNG or JPEG>",
+  "media_type": "image/png",
+  "doc_type": "passport",
+  "human_review": "low_confidence"
+}
+```
+
+| Field | Type | Required | Notes |
+|---|---|---|---|
+| `document_base64` | string | Yes | One page image, base64. Max 10 MB decoded. |
+| `media_type` | string | Yes | `"image/png"` or `"image/jpeg"`. |
+| `doc_type` | string | Yes | One of `"passport"`, `"travel_ticket"`, `"airport_stamp"`, `"proof_of_profile"`, `"travel_declaration"`. |
+| `human_review` | string | No | `"off"`, `"low_confidence"` (default), or `"all"`. [Details below](#the-human_review-toggle). |
+
+## Response
+
+Abbreviated passport example:
+
+```json
+{
+  "data": {
+    "surname": "OKAFOR",
+    "given_names": "ADAEZE N",
+    "passport_number": "A08137243",
+    "nationality": "NGA",
+    "date_of_birth": "1991-04-23",
+    "date_of_expiry": null
+  },
+  "fields": {
+    "passport_number": { "confidence": 0.97, "agreement": 1.0, "flags": ["PROVISIONAL_CALIBRATION"] },
+    "date_of_birth":   { "confidence": 0.94, "agreement": 1.0, "flags": ["PROVISIONAL_CALIBRATION"] },
+    "date_of_expiry":  { "confidence": 0.0,  "agreement": 0.4, "flags": ["NOT_FOUND", "LOW_AGREEMENT", "PROVISIONAL_CALIBRATION"] }
+  },
+  "document_confidence": 0.91,
+  "doc_type": "passport",
+  "pages": 1,
+  "calibration": { "version": "2026-06-provisional", "calibrated": false },
+  "usage": { "pages": 1, "samples": 5, "cost_cents": 25, "balance_after_cents": 4875 }
+}
+```
+
+| Key | What it is |
+|---|---|
+| `data` | The extracted fields, typed per `doc_type`. **Every field is nullable.** When the system can't read a field, it abstains with `null` rather than guessing. |
+| `fields` | Map of field path → `{confidence, agreement, flags}`. `confidence` and `agreement` are `0..1`. `flags` is a list of strings ([table below](#field-flags)). |
+| `document_confidence` | Aggregate confidence across the document's fields, `0..1`. |
+| `doc_type` | Echo of the requested doc type. |
+| `pages` | Pages processed in this request (currently always `1`). |
+| `calibration` | `{version, calibrated}`. Read the next section before using the scores. |
+| `usage` | `{pages, samples, cost_cents, balance_after_cents}` — what this request processed and what it cost. `samples` is the number of extraction samples run for cross-model agreement. |
+
+## Confidence scores are provisional — read this before thresholding
+
+The `calibration` object tells you how to interpret the scores, and right now it says `"calibrated": false`. Here is what that means, honestly:
+
+While `calibrated` is `false`, `confidence` and `agreement` are **provisional rank-orderings, not probabilities**. They come from two signals:
+
+1. **K-sample cross-model agreement** — we run the extraction multiple times (`usage.samples`) across models and measure how often the samples agree on each field.
+2. **Deterministic validators** — where the document format allows it, we verify fields mechanically. For passports, that's the ICAO 9303 MRZ check digits: if a check digit fails, the field's confidence is capped near zero regardless of agreement.
+
+A provisional `confidence` of 0.9 does **not** mean "90% chance the value is correct." It means the field ranks higher than a field scored 0.7. Use provisional scores to rank fields for review and to drive the `human_review` toggle — **do not hard-threshold them** in your own pipeline (e.g. "auto-accept everything above 0.85") as if they were error rates.
+
+`calibrated: true` turns on automatically once our labeled dev set is in place. At that point scores become calibrated probabilities and we publish threshold→error tables, so "reject below 0.85" becomes a statement with a known error rate. Until then, every field carries the `PROVISIONAL_CALIBRATION` flag as a machine-readable reminder.
+
+## Field flags
+
+| Flag | What it means |
+|---|---|
+| `LOW_AGREEMENT` | The extraction samples disagreed on this field's value. |
+| `CHECKSUM_FAILED` | A deterministic validator failed — e.g. an ICAO 9303 MRZ check digit on a passport. Confidence is capped near zero. |
+| `NOT_FOUND` | The system abstained: the field is `null` in `data` because it couldn't be read reliably. |
+| `FORMAT_INVALID` | The value doesn't match the expected format — e.g. a date that isn't ISO 8601. |
+| `PROVISIONAL_CALIBRATION` | Scores on this field are uncalibrated (see the section above). Present on every field while `calibration.calibrated` is `false`. |
+| `CROSS_DOC_MISMATCH` | The value failed a cross-check against another document in the same envelope. |
+| `LOW_IMAGE_QUALITY` | The page image was too degraded (blur, glare, resolution) to read this field confidently. |
+| `HUMAN_VERIFIED` | The field was verified by a human reviewer via the `human_review` toggle. |
+
+## The `human_review` toggle
+
+| Value | Behavior | Billing |
+|---|---|---|
+| `"off"` | Machine only. No human ever sees the page. | Machine rate only. |
+| `"low_confidence"` (default) | Fields below the escalation threshold are verified by AwaitVerify human reviewers **before the response returns**. Verified fields carry the `HUMAN_VERIFIED` flag. | Machine rate + human rate on escalated pages. |
+| `"all"` | Every field is human-verified. | Machine rate + human rate. |
+
+<Note>
+With `human_review` set to `"low_confidence"` or `"all"`, the request blocks until human review completes — set your HTTP client timeout accordingly. With `"off"`, responses are machine-fast.
+</Note>
+
+## Examples
+
+### curl
+
+```bash
+DOC=$(base64 -i passport.png | tr -d '\n')
+
+curl -X POST https://api.awaithumans.dev/api/v1/extract \
+  -H "Authorization: Bearer $AWAITHUMANS_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d "{
+    \"document_base64\": \"$DOC\",
+    \"media_type\": \"image/png\",
+    \"doc_type\": \"passport\",
+    \"human_review\": \"low_confidence\"
+  }"
+```
+
+### Python (httpx)
+
+```python
+import base64
+import os
+
+import httpx
+
+with open("passport.png", "rb") as f:
+    document_base64 = base64.b64encode(f.read()).decode()
+
+response = httpx.post(
+    "https://api.awaithumans.dev/api/v1/extract",
+    headers={"Authorization": f"Bearer {os.environ['AWAITHUMANS_API_KEY']}"},
+    json={
+        "document_base64": document_base64,
+        "media_type": "image/png",
+        "doc_type": "passport",
+        "human_review": "low_confidence",
+    },
+    timeout=300.0,  # human_review may block on a reviewer; give it room
+)
+response.raise_for_status()
+result = response.json()
+
+for path, meta in result["fields"].items():
+    flags = ", ".join(meta["flags"]) or "-"
+    print(f"{path}: confidence={meta['confidence']:.2f} flags=[{flags}]")
+```
+
+## Errors
+
+Every error response carries a stable `error_code` you can pattern-match on.
+
+| Status | `error_code` | What happened | Why | Fix |
+|---|---|---|---|---|
+| 401 | `API_KEY_INVALID` | Request rejected before processing. | The `Authorization: Bearer` key is missing, malformed, or revoked. | Check the header; get a fresh key at [app.awaithumans.dev/keys](https://app.awaithumans.dev/keys). |
+| 402 | `INSUFFICIENT_BALANCE` | Request rejected before processing. | Your balance can't cover this request. | Top up at [app.awaithumans.dev/billing](https://app.awaithumans.dev/billing), then retry. |
+| 400 | `EXTRACTION_INVALID_PAYLOAD` | Request body rejected. | A required field is missing or malformed — bad base64, unknown `media_type`, invalid `human_review` value. | The error message names the field; fix the payload. |
+| 413 | `EXTRACTION_PAYLOAD_TOO_LARGE` | Request body rejected. | The decoded image exceeds 10 MB. | Downscale or re-encode the page image under 10 MB. |
+| 422 | `EXTRACTION_DOC_TYPE_UNSUPPORTED` | Request rejected. | `doc_type` isn't one of the five supported types. | Use `passport`, `travel_ticket`, `airport_stamp`, `proof_of_profile`, or `travel_declaration`. |
+| 502 | `EXTRACTION_PROVIDER_ERROR` | Extraction failed mid-flight. | An upstream model provider errored or timed out. | Transient — retry with backoff. You're not billed for failed requests. |
+| 503 | `EXTRACTION_DISABLED` | Endpoint unavailable. | Machine extraction is disabled for your account or temporarily offline. | Check [status.awaithumans.dev](https://status.awaithumans.dev); if account-level, contact support. |
+
+## Pricing
+
+| Volume | Per page |
+|---|---|
+| Pay-as-you-go | $0.25 |
+| 5,000+ pages/month | $0.15 |
+
+Human-escalated pages (via `human_review`) additionally bill at the human verification rate — $0.80/page standard. `usage.cost_cents` on each response tells you exactly what the request cost, and `usage.balance_after_cents` what's left. Billing draws from the same balance as `verify_document()`; top up at [app.awaithumans.dev/billing](https://app.awaithumans.dev/billing).
+
+## Privacy and retention
+
+Processing is ephemeral. Page images are deleted at response time — once you have the response, we no longer have the image. We retain only extraction metadata (timestamps, doc type, confidence statistics, usage); **never field values, never images**.
+
+One exception, bounded and controllable: **quality-assurance sampling**. A small percentage of extractions is reviewed by AwaitVerify's human reviewers to calibrate the confidence scores, under a bounded 30-day retention window. You can disable QA sampling from your dashboard settings or by contract — when disabled, nothing is retained.
+
+## Where to go next
+
+<CardGroup cols={2}>
+  <Card title="The three flows" icon="route" href="/awaitverify/flows">
+    When you need a human on every document: verify_document() with Flows A, B, and C.
+  </Card>
+  <Card title="Security model" icon="lock" href="/awaitverify/security">
+    Fragmentation, AES-256-GCM, and what we retain vs. what we never see.
+  </Card>
+</CardGroup>
