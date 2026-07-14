@@ -14,6 +14,27 @@ into a versioned release when tagged.
 
 ---
 
+## [0.1.12] — 2026-07-14
+
+### Added
+
+- **`extract_document()` / `awaitExtract` — machine extraction in the
+  Python SDK.** One call sends a page image to the AwaitVerify managed
+  backend and returns typed fields with per-field confidence scores
+  (`ExtractionResult`): built-in doc types or a custom
+  `response_schema`, the `human_review` toggle (default
+  `"low_confidence"` — blocking, with a review-sized default timeout),
+  and honest calibration metadata (`calibration.calibrated`). Also
+  `extract_envelope()` for multi-document cross-checked extraction,
+  plus sync variants. No new dependencies — httpx + pydantic only.
+  Human review resolves asynchronously: the POST returns immediately
+  with a pending-review handle and the SDK polls the task endpoint
+  and merges reviewer values client-side (`HUMAN_VERIFIED` at 0.99),
+  controlled by `review_wait_seconds` — production gateways cap
+  single requests at ~4 minutes, so blocking was never an option.
+
+---
+
 ## [0.1.10] — 2026-06-04
 
 Combined release covering the work that landed between 0.1.8 and now.
