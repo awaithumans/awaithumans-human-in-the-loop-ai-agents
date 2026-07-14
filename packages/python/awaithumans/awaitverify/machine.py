@@ -49,11 +49,16 @@ _DEFAULT_MANAGED_URL = "https://api.awaithumans.dev"
 _MAX_IMAGE_BYTES = 10 * 1024 * 1024
 _MEDIA_TYPES = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg"}
 
-# Machine-only calls answer in seconds; blocking human review can
-# take as long as the reviewer queue — sized to the backend's own
-# escalation window plus margin.
 _MACHINE_TIMEOUT_SECONDS = 180.0
-_HUMAN_REVIEW_TIMEOUT_SECONDS = 1200.0
+# With human_review on, the POST returns immediately with a pending
+# review handle; the SDK then long-polls the task endpoint (25s
+# increments) and merges reviewer values client-side. This is how
+# long we keep polling before returning machine values with the
+# PENDING_HUMAN_REVIEW flags intact.
+_REVIEW_WAIT_SECONDS = 1200.0
+_POLL_INCREMENT_SECONDS = 25
+_HUMAN_VERIFIED_CONFIDENCE = 0.99
+_TERMINAL_STATUSES = {"completed", "timed_out", "cancelled"}
 
 
 class ExtractedFieldConfidence(BaseModel):
@@ -75,8 +80,20 @@ class MachineExtractionUsage(BaseModel):
     balance_after_cents: int | None = None
 
 
+class PendingReviewInfo(BaseModel):
+    task_id: str
+    fields: list[str]
+
+
 class ExtractionResult(BaseModel):
-    """Typed mirror of the managed backend's extraction response."""
+    """Typed mirror of the managed backend's extraction response.
+
+    ``review`` is set when human review was requested: normally the
+    SDK has already polled and merged by the time you hold this
+    object, and merged fields carry HUMAN_VERIFIED. If the review
+    wait timed out, the listed fields still carry
+    PENDING_HUMAN_REVIEW and hold their machine values.
+    """
 
     data: dict[str, Any]
     fields: dict[str, ExtractedFieldConfidence]
@@ -85,6 +102,7 @@ class ExtractionResult(BaseModel):
     calibration: ExtractionCalibration
     pages: int
     usage: MachineExtractionUsage
+    review: PendingReviewInfo | None = None
 
 
 class EnvelopeCrossCheck(BaseModel):
@@ -159,10 +177,63 @@ async def _load_document(
     return payload, resolved
 
 
-def _default_timeout(human_review: str, timeout_seconds: float | None) -> float:
-    if timeout_seconds is not None:
-        return timeout_seconds
-    return _MACHINE_TIMEOUT_SECONDS if human_review == "off" else _HUMAN_REVIEW_TIMEOUT_SECONDS
+async def _merge_review(
+    result: ExtractionResult,
+    *,
+    api_key: str | None,
+    base: str,
+    review_wait_seconds: float,
+) -> ExtractionResult:
+    """Poll the review task and merge reviewer values client-side."""
+    import json as _json
+    import time as _time
+
+    from awaithumans.awaitverify._managed_client import poll_task  # noqa: PLC0415
+
+    assert result.review is not None
+    deadline = _time.monotonic() + review_wait_seconds
+    while _time.monotonic() < deadline:
+        polled = await poll_task(
+            managed_url=base,
+            api_key=api_key,
+            task_id=result.review.task_id,
+            timeout_seconds=_POLL_INCREMENT_SECONDS,
+        )
+        if polled.status not in _TERMINAL_STATUSES:
+            continue
+        if polled.status == "completed" and polled.response_json:
+            try:
+                human_values = _json.loads(polled.response_json)
+            except ValueError:
+                return result
+            if not isinstance(human_values, dict):
+                return result
+            for path in result.review.fields:
+                entry = result.fields.get(path)
+                if entry is None:
+                    continue
+                if path in human_values:
+                    result.data[path] = human_values[path]
+                entry.confidence = _HUMAN_VERIFIED_CONFIDENCE
+                entry.flags = [
+                    f
+                    for f in entry.flags
+                    if f not in ("PENDING_HUMAN_REVIEW", "NOT_FOUND", "LOW_AGREEMENT")
+                ]
+                entry.flags.append("HUMAN_VERIFIED")
+            result.document_confidence = round(
+                sum(e.confidence for e in result.fields.values())
+                / max(len(result.fields), 1),
+                4,
+            )
+        return result
+    logger.warning(
+        "Human review still pending after %.0fs (task=%s) — returning machine "
+        "values; the listed fields keep PENDING_HUMAN_REVIEW.",
+        review_wait_seconds,
+        result.review.task_id,
+    )
+    return result
 
 
 async def extract_document(
@@ -176,6 +247,7 @@ async def extract_document(
     api_key: str | None = None,
     managed_url: str | None = None,
     timeout_seconds: float | None = None,
+    review_wait_seconds: float = _REVIEW_WAIT_SECONDS,
 ) -> ExtractionResult:
     """Machine-extract one document page via the managed backend.
 
@@ -187,8 +259,12 @@ async def extract_document(
             "proof_of_profile", "travel_declaration") or your own
             schema ({"name": ..., "fields": [{"name", "type"}]}).
         human_review: "off" (machine only), "low_confidence"
-            (default — reviewers verify low-confidence fields before
-            the response returns), or "all".
+            (default — reviewers verify low-confidence fields; the
+            SDK polls and merges their answers before returning), or
+            "all".
+        review_wait_seconds: how long to wait for human review
+            before returning machine values with PENDING_HUMAN_REVIEW
+            flags (poll continues in 25s increments until then).
         api_key / managed_url: fall back to AWAITHUMANS_API_KEY /
             AWAITHUMANS_MANAGED_URL.
     """
@@ -210,13 +286,20 @@ async def extract_document(
     else:
         body["response_schema"] = response_schema
 
+    base = _resolve_base(managed_url)
+    key = _resolve_key(api_key)
     raw = await _post_json(
-        url=f"{_resolve_base(managed_url)}/api/v1/extract",
+        url=f"{base}/api/v1/extract",
         body=body,
-        api_key=_resolve_key(api_key),
-        http_timeout_seconds=_default_timeout(human_review, timeout_seconds),
+        api_key=key,
+        http_timeout_seconds=timeout_seconds or _MACHINE_TIMEOUT_SECONDS,
     )
-    return ExtractionResult.model_validate(raw)
+    result = ExtractionResult.model_validate(raw)
+    if result.review is not None and review_wait_seconds > 0:
+        result = await _merge_review(
+            result, api_key=key, base=base, review_wait_seconds=review_wait_seconds
+        )
+    return result
 
 
 def extract_document_sync(**kwargs: Any) -> ExtractionResult:

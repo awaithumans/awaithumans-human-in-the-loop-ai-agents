@@ -12,6 +12,10 @@ into a versioned release when tagged.
 
 ## [Unreleased]
 
+---
+
+## [0.1.12] — 2026-07-14
+
 ### Added
 
 - **`extract_document()` / `awaitExtract` — machine extraction in the
@@ -23,6 +27,11 @@ into a versioned release when tagged.
   and honest calibration metadata (`calibration.calibrated`). Also
   `extract_envelope()` for multi-document cross-checked extraction,
   plus sync variants. No new dependencies — httpx + pydantic only.
+  Human review resolves asynchronously: the POST returns immediately
+  with a pending-review handle and the SDK polls the task endpoint
+  and merges reviewer values client-side (`HUMAN_VERIFIED` at 0.99),
+  controlled by `review_wait_seconds` — production gateways cap
+  single requests at ~4 minutes, so blocking was never an option.
 
 ---
 

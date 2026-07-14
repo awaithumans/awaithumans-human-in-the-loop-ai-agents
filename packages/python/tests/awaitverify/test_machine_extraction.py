@@ -87,7 +87,7 @@ async def test_happy_path_typed_result(
     assert call["http_timeout_seconds"] == machine_mod._MACHINE_TIMEOUT_SECONDS
 
 
-async def test_human_review_default_and_timeout(
+async def test_human_review_default_is_low_confidence(
     page: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     recorder = _Recorder(_WIRE_RESPONSE)
@@ -95,8 +95,9 @@ async def test_human_review_default_and_timeout(
     await extract_document(document_path=page, doc_type="passport", api_key="k")
     call = recorder.calls[0]
     assert call["body"]["human_review"] == "low_confidence"
-    # Blocking review gets the long timeout automatically.
-    assert call["http_timeout_seconds"] == machine_mod._HUMAN_REVIEW_TIMEOUT_SECONDS
+    # The POST always returns fast (reviews resolve via polling), so
+    # the HTTP timeout stays at the machine default.
+    assert call["http_timeout_seconds"] == machine_mod._MACHINE_TIMEOUT_SECONDS
 
 
 async def test_custom_schema_body(page: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -187,3 +188,80 @@ def test_public_exports() -> None:
     assert awaithumans.extract_document is extract_document
     assert awaithumans.awaitExtract is extract_document
     assert awaithumans.ExtractionResult is ExtractionResult
+
+
+_REVIEW_RESPONSE: dict[str, Any] = {
+    **_WIRE_RESPONSE,
+    "fields": {
+        **_WIRE_RESPONSE["fields"],
+        "surname": {
+            "path": "surname",
+            "confidence": 0.4,
+            "agreement": 0.4,
+            "flags": ["LOW_AGREEMENT", "PENDING_HUMAN_REVIEW", "PROVISIONAL_CALIBRATION"],
+        },
+    },
+    "review": {"task_id": "task-77", "fields": ["surname"]},
+}
+
+
+class _PolledTask:
+    def __init__(self, status: str, response_json: str | None) -> None:
+        self.task_id = "task-77"
+        self.status = status
+        self.response_json = response_json
+
+
+async def test_review_polled_and_merged(page: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    import json
+
+    from awaithumans.awaitverify import _managed_client
+
+    monkeypatch.setattr(machine_mod, "_post_json", _Recorder(_REVIEW_RESPONSE))
+    polls: list[str] = []
+
+    async def fake_poll(**kwargs: Any) -> _PolledTask:
+        polls.append(kwargs["task_id"])
+        if len(polls) < 2:
+            return _PolledTask("awaiting_review", None)
+        return _PolledTask("completed", json.dumps({"surname": "De Bruijn-Corrected"}))
+
+    monkeypatch.setattr(_managed_client, "poll_task", fake_poll)
+    result = await extract_document(
+        document_path=page, doc_type="passport", api_key="k"
+    )
+    assert polls == ["task-77", "task-77"]
+    assert result.data["surname"] == "De Bruijn-Corrected"
+    entry = result.fields["surname"]
+    assert entry.confidence == 0.99
+    assert "HUMAN_VERIFIED" in entry.flags
+    assert "PENDING_HUMAN_REVIEW" not in entry.flags
+
+
+async def test_review_wait_timeout_returns_machine_values(
+    page: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from awaithumans.awaitverify import _managed_client
+
+    monkeypatch.setattr(machine_mod, "_post_json", _Recorder(_REVIEW_RESPONSE))
+
+    async def never_done(**kwargs: Any) -> _PolledTask:
+        return _PolledTask("awaiting_review", None)
+
+    monkeypatch.setattr(_managed_client, "poll_task", never_done)
+    result = await extract_document(
+        document_path=page,
+        doc_type="passport",
+        api_key="k",
+        review_wait_seconds=0.01,
+    )
+    assert "PENDING_HUMAN_REVIEW" in result.fields["surname"].flags
+    assert result.review is not None and result.review.task_id == "task-77"
+
+
+async def test_machine_off_skips_polling(page: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(machine_mod, "_post_json", _Recorder(_WIRE_RESPONSE))
+    result = await extract_document(
+        document_path=page, doc_type="passport", human_review="off", api_key="k"
+    )
+    assert result.review is None
