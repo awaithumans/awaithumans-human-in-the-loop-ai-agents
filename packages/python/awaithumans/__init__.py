@@ -98,6 +98,19 @@ def verify_document_sync(**kwargs: Any) -> Any:
 awaitVerify = verify_document  # noqa: N816
 awaitVerifySync = verify_document_sync  # noqa: N816
 
+# Machine extraction (Flow D) — thin re-exports; extract_document is
+# stateless (env-driven config), no default client needed.
+from awaithumans.awaitverify.machine import (  # noqa: E402
+    EnvelopeResult,
+    ExtractionResult,
+    awaitExtract,
+    awaitExtractSync,
+    extract_document,
+    extract_document_sync,
+    extract_envelope,
+    extract_envelope_sync,
+)
+
 
 async def await_review(**kwargs: Any) -> Any:
     """Module-level shim — uses the lazy default client.
@@ -136,6 +149,14 @@ __all__ = [
     "verify_document_sync",
     "awaitVerify",
     "awaitVerifySync",
+    "extract_document",
+    "extract_document_sync",
+    "extract_envelope",
+    "extract_envelope_sync",
+    "awaitExtract",
+    "awaitExtractSync",
+    "ExtractionResult",
+    "EnvelopeResult",
     # AwaitReview — no-document text/data review (snake + camel)
     "await_review",
     "await_review_sync",

@@ -19,10 +19,28 @@ from awaithumans.awaitverify.extraction import (
     ProviderNotSupportedError,
 )
 from awaithumans.awaitverify.fragmentation import fragment_document, load_pages
+from awaithumans.awaitverify.machine import (
+    EnvelopeResult,
+    ExtractionResult,
+    awaitExtract,
+    awaitExtractSync,
+    extract_document,
+    extract_document_sync,
+    extract_envelope,
+    extract_envelope_sync,
+)
 from awaithumans.awaitverify.types import ManagedAssignment, Priority
 
 __all__ = [
     "verify_document",
+    "extract_document",
+    "extract_document_sync",
+    "extract_envelope",
+    "extract_envelope_sync",
+    "awaitExtract",
+    "awaitExtractSync",
+    "ExtractionResult",
+    "EnvelopeResult",
     "await_review",
     "ManagedAssignment",
     "Priority",

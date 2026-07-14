@@ -12,6 +12,18 @@ into a versioned release when tagged.
 
 ## [Unreleased]
 
+### Added
+
+- **`extract_document()` / `awaitExtract` — machine extraction in the
+  Python SDK.** One call sends a page image to the AwaitVerify managed
+  backend and returns typed fields with per-field confidence scores
+  (`ExtractionResult`): built-in doc types or a custom
+  `response_schema`, the `human_review` toggle (default
+  `"low_confidence"` — blocking, with a review-sized default timeout),
+  and honest calibration metadata (`calibration.calibrated`). Also
+  `extract_envelope()` for multi-document cross-checked extraction,
+  plus sync variants. No new dependencies — httpx + pydantic only.
+
 ---
 
 ## [0.1.10] — 2026-06-04

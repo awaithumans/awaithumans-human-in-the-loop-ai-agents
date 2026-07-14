@@ -8,7 +8,7 @@ Machine extraction is AwaitVerify's machine-only tier. Where `verify_document()`
 Use it when you have document volume that doesn't justify a human on every page, but you still want honest signals about which fields to trust.
 
 <Note>
-An `extract_document()` SDK helper is coming soon. Today you call the HTTP endpoint directly — the examples below use `curl` and `httpx`.
+Call it from the Python SDK (`pip install awaithumans`) with `extract_document()` / `awaitExtract`, or hit the HTTP endpoint directly — both are shown below.
 </Note>
 
 ## The endpoint
@@ -117,6 +117,33 @@ With `human_review` set to `"low_confidence"` or `"all"`, the request blocks unt
 </Note>
 
 ## Examples
+
+### Python SDK
+
+```python
+from awaithumans import extract_document  # alias: awaitExtract
+
+result = await extract_document(
+    document_path="./passport.png",
+    doc_type="passport",
+    human_review="off",              # or "low_confidence" (default) / "all"
+)
+
+result.data["passport_number"]                    # extracted value or None
+result.fields["passport_number"].confidence       # per-field score
+result.fields["passport_number"].flags            # e.g. ["PROVISIONAL_CALIBRATION"]
+result.calibration.calibrated                     # False until the fitted calibrator ships
+result.usage.cost_cents                           # what this call debited
+```
+
+`extract_document_sync(...)` is the blocking variant. Reads the
+`AWAITHUMANS_API_KEY` and `AWAITHUMANS_MANAGED_URL` environment
+variables, or pass `api_key=` / `managed_url=` explicitly. With
+`human_review` on, the call blocks until review completes — the SDK
+sizes its timeout accordingly.
+
+For several documents from one applicant, `extract_envelope(documents=[...])`
+maps to [the envelope endpoint](#envelopes-one-applicant-several-documents).
 
 ### curl
 
