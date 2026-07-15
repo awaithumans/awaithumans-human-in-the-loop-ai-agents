@@ -38,8 +38,11 @@ One request carries **one document page image**, base64-encoded. `image/png` or 
 |---|---|---|---|
 | `document_base64` | string | Yes | One page image, base64. Max 10 MB decoded. |
 | `media_type` | string | Yes | `"image/png"` or `"image/jpeg"`. |
-| `doc_type` | string | Yes | One of `"passport"`, `"travel_ticket"`, `"airport_stamp"`, `"proof_of_profile"`, `"travel_declaration"`. |
+| `doc_type` | string | One of these two | One of `"passport"`, `"travel_ticket"`, `"airport_stamp"`, `"proof_of_profile"`, `"travel_declaration"`. Built-in schemas come with deterministic validators (MRZ check digits, IATA formats, date logic). |
+| `response_schema` | object | One of these two | Your own schema instead of a built-in one — see [Custom schemas](#custom-schemas). |
 | `human_review` | string | No | `"off"`, `"low_confidence"` (default), or `"all"`. [Details below](#the-human_review-toggle). |
+
+Send exactly one of `doc_type` or `response_schema` — both or neither is a 422.
 
 ## Response
 
@@ -115,6 +118,43 @@ A provisional `confidence` of 0.9 does **not** mean "90% chance the value is cor
 <Note>
 With `human_review` set to `"low_confidence"` or `"all"`, the request blocks until human review completes — set your HTTP client timeout accordingly. With `"off"`, responses are machine-fast.
 </Note>
+
+## Custom schemas
+
+When none of the built-in document types fit, define your own fields:
+
+```json
+{
+  "document_base64": "<base64>",
+  "media_type": "image/png",
+  "response_schema": {
+    "name": "Invoice",
+    "fields": [
+      { "name": "vendor", "type": "string" },
+      { "name": "invoice_number", "type": "code" },
+      { "name": "issue_date", "type": "date" }
+    ]
+  },
+  "human_review": "off"
+}
+```
+
+Field `type` selects the engine's comparison semantics: `"string"` (case-insensitive), `"code"` (exact, uppercase — identifiers, reference numbers), `"date"` (must be `YYYY-MM-DD`; anything else is flagged `FORMAT_INVALID`). Up to 40 fields; names are `snake_case`. Every field is nullable — the engine abstains rather than guesses, same as the built-in schemas. Custom schemas have no deterministic validators, so their ceiling reflects the unvalidated discount until calibration takes over.
+
+## Envelopes: one applicant, several documents
+
+`POST /api/v1/extract/envelope` extracts 2–10 documents belonging to the same applicant in one call and cross-checks them against each other — the passport number quoted on a travel declaration, the passenger name on a ticket against the passport surname, nationalities across documents.
+
+```json
+{
+  "documents": [
+    { "document_base64": "<base64>", "media_type": "image/jpeg", "doc_type": "passport" },
+    { "document_base64": "<base64>", "media_type": "image/png", "doc_type": "travel_declaration" }
+  ]
+}
+```
+
+The response carries a full extraction result per document (same shape as the single-document response), plus `envelope_confidence` and a `cross_checks` list describing every detected inconsistency. When two documents disagree, **both** fields are capped and flagged `CROSS_DOC_MISMATCH` — the system knows they can't both be right, not which one is misread. Pages bill together at the machine rate. Envelopes are machine-only: run documents individually if you want the `human_review` toggle.
 
 ## Examples
 
