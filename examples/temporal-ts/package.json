@@ -15,7 +15,7 @@
     "@temporalio/worker": "^1.13.0",
     "@temporalio/workflow": "^1.13.0",
     "awaithumans": "file:../../packages/typescript-sdk",
-    "hono": "^4.12.26",
+    "hono": "^4.13.1",
     "zod": "^3.23.0"
   },
   "devDependencies": {
